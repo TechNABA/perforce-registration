@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Perforce NABA — Iscrizione</title>
+<title>NABA - Perforce Registration</title>
+<link rel="icon" href="https://www.naba.it/favicon.ico" type="image/x-icon">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -28,9 +29,7 @@
     --font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Helvetica Neue', sans-serif;
     --transition: 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
   }
-
   * { margin: 0; padding: 0; box-sizing: border-box; }
-
   body {
     font-family: var(--font);
     background: var(--bg);
@@ -42,339 +41,194 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /* ── Language bar ── */
   .lang-bar {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    display: flex;
-    justify-content: flex-end;
-    padding: 16px 24px;
-    z-index: 100;
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; justify-content: flex-end;
+    padding: 16px 24px; z-index: 100;
     background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%);
     pointer-events: none;
   }
-
   .lang-switcher {
-    display: flex;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 100px;
-    overflow: hidden;
-    pointer-events: all;
+    display: flex; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 100px;
+    overflow: hidden; pointer-events: all;
   }
-
   .lang-btn {
-    padding: 7px 16px;
-    font-family: var(--font);
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-tertiary);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    transition: all var(--transition);
-    position: relative;
+    padding: 6px 14px; font-family: var(--font); font-size: 13px; font-weight: 500;
+    color: var(--text-tertiary); background: transparent; border: none;
+    cursor: pointer; transition: all var(--transition); position: relative;
+    display: flex; align-items: center; gap: 6px;
   }
-
   .lang-btn:not(:last-child)::after {
-    content: '';
-    position: absolute;
-    right: 0; top: 6px; bottom: 6px;
-    width: 1px;
-    background: var(--border);
+    content: ''; position: absolute; right: 0; top: 6px; bottom: 6px;
+    width: 1px; background: var(--border);
   }
-
-  .lang-btn.active {
-    color: var(--text-primary);
-    background: rgba(255,255,255,0.06);
-  }
-
+  .lang-btn.active { color: var(--text-primary); background: rgba(255,255,255,0.06); }
   .lang-btn:hover:not(.active) { color: var(--text-secondary); }
+  .lang-flag { width: 20px; height: 14px; border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+  .lang-flag svg { display: block; width: 100%; height: 100%; }
 
-  .hero {
-    text-align: center;
-    padding: 80px 24px 48px;
-    max-width: 680px;
-  }
-
+  /* ── Hero ── */
+  .hero { text-align: center; padding: 80px 24px 48px; max-width: 680px; }
   .hero h1 {
-    font-size: clamp(32px, 5vw, 48px);
-    font-weight: 600;
-    letter-spacing: -0.025em;
-    line-height: 1.1;
-    color: var(--text-primary);
-    margin-bottom: 16px;
+    font-size: clamp(32px, 5vw, 48px); font-weight: 600;
+    letter-spacing: -0.025em; line-height: 1.1;
+    color: var(--text-primary); margin-bottom: 16px;
   }
-
   .hero p {
-    font-size: 17px;
-    font-weight: 400;
-    color: var(--text-secondary);
-    line-height: 1.6;
-    max-width: 480px;
-    margin: 0 auto;
+    font-size: 17px; font-weight: 400; color: var(--text-secondary);
+    line-height: 1.6; max-width: 480px; margin: 0 auto;
   }
 
+  /* ── Card ── */
   .form-card {
-    width: 100%;
-    max-width: 580px;
-    background: var(--surface);
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow-md);
-    padding: 48px 40px;
-    margin: 0 24px 80px;
+    width: 100%; max-width: 580px; background: var(--surface);
+    border-radius: var(--radius-lg); border: 1px solid var(--border);
+    box-shadow: var(--shadow-md); padding: 48px 40px; margin: 0 24px 80px;
     animation: cardIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-  @keyframes cardIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
+  /* ── Sections ── */
   .form-section { margin-bottom: 32px; }
-  .form-section:first-child { margin-bottom: 10px; }
   .form-section:last-of-type { margin-bottom: 0; }
-
   .section-label {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-tertiary);
-    margin-bottom: 20px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--border);
+    font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-tertiary);
+    margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border);
   }
 
-  .input-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    margin-bottom: 12px;
-  }
-
+  /* ── Inputs ── */
+  .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
   .input-group { position: relative; margin-bottom: 12px; }
   .input-row .input-group { margin-bottom: 0; }
-
   .input-group label {
-    display: block;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    margin-bottom: 6px;
-    transition: color var(--transition);
+    display: block; font-size: 13px; font-weight: 500;
+    color: var(--text-secondary); margin-bottom: 6px; transition: color var(--transition);
   }
-
   .input-group:focus-within label { color: var(--accent); }
-
-  .input-group input,
-  .input-group select {
-    width: 100%;
-    height: 48px;
-    padding: 0 16px;
-    font-family: var(--font);
-    font-size: 16px;
-    font-weight: 400;
-    color: var(--text-primary);
-    background: var(--input-bg);
-    border: 1.5px solid var(--border);
-    border-radius: var(--radius-sm);
-    outline: none;
-    transition: all var(--transition);
-    appearance: none;
-    -webkit-appearance: none;
+  .input-group input, .input-group select {
+    width: 100%; height: 48px; padding: 0 16px; font-family: var(--font);
+    font-size: 16px; font-weight: 400; color: var(--text-primary);
+    background: var(--input-bg); border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm); outline: none;
+    transition: all var(--transition); appearance: none; -webkit-appearance: none;
   }
-
   .input-group input::placeholder { color: var(--text-tertiary); font-weight: 300; }
-
-  .input-group input:focus,
-  .input-group select:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-light);
-    background: #3a3a3c;
+  .input-group input:focus, .input-group select:focus {
+    border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); background: #3a3a3c;
   }
-
-  .input-group input.error {
-    border-color: var(--error);
-    box-shadow: 0 0 0 3px var(--error-bg);
-  }
-
+  .input-group input.error { border-color: var(--error); box-shadow: 0 0 0 3px var(--error-bg); }
   .input-group select {
     cursor: pointer;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' fill='none' stroke='%236e6e73' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 16px center;
-    padding-right: 40px;
+    background-repeat: no-repeat; background-position: right 16px center; padding-right: 40px;
   }
-
-  .error-msg {
-    font-size: 12px;
-    color: var(--error);
-    margin-top: 4px;
-    display: none;
-    align-items: center;
-    gap: 4px;
-  }
-
+  .error-msg { font-size: 12px; color: var(--error); margin-top: 4px; display: none; align-items: center; gap: 4px; }
   .error-msg.visible { display: flex; }
 
-  .preview-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 16px;
-    min-height: 36px;
-  }
-
+  /* ── Preview pills ── */
+  .preview-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; min-height: 36px; }
   .preview-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 14px;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    border-radius: 100px;
-    font-size: 13px;
-    color: var(--text-secondary);
-    transition: all var(--transition);
-    opacity: 0;
-    transform: translateY(4px);
+    display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px;
+    background: var(--input-bg); border: 1px solid var(--border); border-radius: 100px;
+    font-size: 13px; color: var(--text-secondary); transition: all var(--transition);
+    opacity: 0; transform: translateY(4px);
   }
-
   .preview-pill.active { opacity: 1; transform: translateY(0); }
+  .preview-pill .pill-label { font-weight: 500; color: var(--text-tertiary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .preview-pill .pill-value { font-weight: 500; color: var(--text-primary); font-family: 'SF Mono','Menlo','Consolas',monospace; font-size: 13px; }
 
-  .preview-pill .pill-label {
-    font-weight: 500;
-    color: var(--text-tertiary);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .preview-pill .pill-value {
-    font-weight: 500;
-    color: var(--text-primary);
-    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
-    font-size: 13px;
-  }
-
+  /* ── Toggle ── */
   .toggle-container { display: flex; align-items: center; gap: 16px; padding: 14px 0; }
   .toggle-label-text { font-size: 15px; font-weight: 500; color: var(--text-primary); flex: 1; }
   .toggle-sublabel { font-size: 13px; font-weight: 400; color: var(--text-tertiary); margin-top: 2px; }
-
   .toggle-switch { position: relative; width: 51px; height: 31px; flex-shrink: 0; }
   .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
-
-  .toggle-track {
-    position: absolute; inset: 0;
-    background: #48484a;
-    border-radius: 31px;
-    cursor: pointer;
-    transition: background var(--transition);
-  }
-
+  .toggle-track { position: absolute; inset: 0; background: #48484a; border-radius: 31px; cursor: pointer; transition: background var(--transition); }
   .toggle-switch input:checked + .toggle-track { background: var(--success); }
-
-  .toggle-knob {
-    position: absolute;
-    top: 2px; left: 2px;
-    width: 27px; height: 27px;
-    background: white;
-    border-radius: 50%;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-    transition: transform var(--transition);
-    pointer-events: none;
-  }
-
+  .toggle-knob { position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; background: white; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.3); transition: transform var(--transition); pointer-events: none; }
   .toggle-switch input:checked ~ .toggle-knob { transform: translateX(20px); }
 
+  /* ── Conditional fields ── */
   .conditional-field {
-    overflow: hidden;
-    max-height: 0; opacity: 0;
+    overflow: hidden; max-height: 0; opacity: 0;
     transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, margin 0.3s ease;
     margin-top: 0;
   }
+  .conditional-field.visible { max-height: 2000px; opacity: 1; margin-top: 12px; }
 
-  .conditional-field.visible { max-height: 120px; opacity: 1; margin-top: 12px; }
+  /* ── Segmented control (singola / gruppo) ── */
+  .segmented-control {
+    display: flex; background: var(--input-bg); border-radius: var(--radius-sm);
+    padding: 3px; gap: 2px; margin-top: 12px;
+  }
+  .seg-btn {
+    flex: 1; padding: 10px 0; font-family: var(--font); font-size: 14px; font-weight: 500;
+    color: var(--text-tertiary); background: transparent; border: none;
+    border-radius: 8px; cursor: pointer; transition: all var(--transition); text-align: center;
+  }
+  .seg-btn.active { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+  .seg-btn:hover:not(.active) { color: var(--text-secondary); }
 
-  .submit-btn {
-    width: 100%;
-    height: 52px;
-    margin-top: 36px;
-    background: #f5f5f7;
-    color: #1c1c1e;
-    font-family: var(--font);
-    font-size: 16px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    border: none;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    position: relative;
-    overflow: hidden;
+  /* ── Group members ── */
+  .group-members-container { margin-top: 16px; }
+  .member-card {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin-bottom: 10px;
+    position: relative; animation: memberIn 0.3s ease;
+  }
+  @keyframes memberIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .member-card .member-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+  }
+  .member-number {
+    font-size: 12px; font-weight: 600; color: var(--accent);
+    background: var(--accent-light); padding: 3px 10px; border-radius: 100px;
+  }
+  .remove-member-btn {
+    width: 28px; height: 28px; border-radius: 50%; border: none;
+    background: rgba(255,69,58,0.1); color: var(--error); cursor: pointer;
+    font-size: 16px; display: flex; align-items: center; justify-content: center;
     transition: all var(--transition);
   }
+  .remove-member-btn:hover { background: rgba(255,69,58,0.2); }
+  .member-card .input-row { margin-bottom: 8px; }
+  .member-card .input-group { margin-bottom: 8px; }
+  .member-card .preview-bar { margin-top: 8px; min-height: 0; }
 
-  .submit-btn:hover {
-    background: #ffffff;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.15);
+  .add-member-btn {
+    width: 100%; padding: 12px; margin-top: 4px;
+    font-family: var(--font); font-size: 14px; font-weight: 500;
+    color: var(--accent); background: var(--accent-light);
+    border: 1.5px dashed rgba(10,132,255,0.3); border-radius: var(--radius-sm);
+    cursor: pointer; transition: all var(--transition); text-align: center;
   }
+  .add-member-btn:hover { background: rgba(10,132,255,0.18); border-color: var(--accent); }
 
+  /* ── Submit ── */
+  .submit-btn {
+    width: 100%; height: 52px; margin-top: 36px; background: #f5f5f7; color: #1c1c1e;
+    font-family: var(--font); font-size: 16px; font-weight: 600;
+    letter-spacing: -0.01em; border: none; border-radius: var(--radius-sm);
+    cursor: pointer; position: relative; overflow: hidden; transition: all var(--transition);
+  }
+  .submit-btn:hover { background: #ffffff; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(255,255,255,0.15); }
   .submit-btn:active { transform: translateY(0); box-shadow: none; }
   .submit-btn:disabled { background: #48484a; color: #86868b; cursor: not-allowed; transform: none; box-shadow: none; }
   .submit-btn .btn-text { transition: opacity 0.2s; }
-
-  .submit-btn .btn-spinner {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    opacity: 0; transition: opacity 0.2s;
-  }
-
+  .submit-btn .btn-spinner { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; }
   .submit-btn.loading .btn-text { opacity: 0; }
   .submit-btn.loading .btn-spinner { opacity: 1; }
-
-  .spinner {
-    width: 20px; height: 20px;
-    border: 2.5px solid rgba(28,28,30,0.3);
-    border-top-color: #1c1c1e;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-  }
-
+  .spinner { width: 20px; height: 20px; border: 2.5px solid rgba(28,28,30,0.3); border-top-color: #1c1c1e; border-radius: 50%; animation: spin 0.7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .status-message {
-    margin-top: 16px;
-    padding: 14px 18px;
-    border-radius: var(--radius-sm);
-    font-size: 14px;
-    font-weight: 500;
-    display: none;
-    align-items: center;
-    gap: 10px;
-    animation: statusIn 0.3s ease;
-  }
-
-  @keyframes statusIn {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .status-message.success {
-    display: flex;
-    background: var(--success-bg);
-    color: var(--success);
-    border: 1px solid rgba(48, 209, 88, 0.2);
-  }
-
-  .status-message.error {
-    display: flex;
-    background: var(--error-bg);
-    color: var(--error);
-    border: 1px solid rgba(255, 69, 58, 0.15);
-  }
-
+  /* ── Status ── */
+  .status-message { margin-top: 16px; padding: 14px 18px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; display: none; align-items: center; gap: 10px; animation: statusIn 0.3s ease; }
+  @keyframes statusIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+  .status-message.success { display: flex; background: var(--success-bg); color: var(--success); border: 1px solid rgba(48,209,88,0.2); }
+  .status-message.error { display: flex; background: var(--error-bg); color: var(--error); border: 1px solid rgba(255,69,58,0.15); }
   .status-icon { width: 20px; height: 20px; flex-shrink: 0; }
 
   .footer { text-align: center; padding: 24px; font-size: 12px; color: var(--text-tertiary); }
@@ -390,8 +244,14 @@
 
 <div class="lang-bar">
   <div class="lang-switcher">
-    <button class="lang-btn active" onclick="setLang('it')">IT</button>
-    <button class="lang-btn" onclick="setLang('en')">EN</button>
+    <button class="lang-btn active" data-lang="it" onclick="setLang('it')">
+      <span class="lang-flag"><svg viewBox="0 0 640 480"><rect width="213.3" height="480" fill="#009246"/><rect x="213.3" width="213.4" height="480" fill="#fff"/><rect x="426.7" width="213.3" height="480" fill="#ce2b37"/></svg></span>
+      IT
+    </button>
+    <button class="lang-btn" data-lang="en" onclick="setLang('en')">
+      <span class="lang-flag"><svg viewBox="0 0 640 480"><path fill="#012169" d="M0 0h640v480H0z"/><path fill="#FFF" d="m75 0 244 181L562 0h78v62L400 241l240 178v61h-80L320 301 81 480H0v-60l239-178L0 64V0z"/><path fill="#C8102E" d="m424 281 216 159v40L369 281zm-184 20 6 35L54 480H0zM640 0v3L391 191l2-44L590 0zM0 0l239 176h-60L0 42z"/><path fill="#FFF" d="M241 0v480h160V0zM0 160v160h640V160z"/><path fill="#C8102E" d="M0 193v96h640v-96zM273 0v480h96V0z"/></svg></span>
+      EN
+    </button>
   </div>
 </div>
 
@@ -403,6 +263,7 @@
 <main class="form-card">
   <form id="regForm" novalidate>
 
+    <!-- Identity -->
     <div class="form-section">
       <div class="section-label" data-i18n="section_identity">Identità</div>
       <div class="input-row">
@@ -429,6 +290,7 @@
       </div>
     </div>
 
+    <!-- Contact -->
     <div class="form-section">
       <div class="section-label" data-i18n="section_contact">Contatto</div>
       <div class="input-group">
@@ -438,6 +300,7 @@
       </div>
     </div>
 
+    <!-- Project -->
     <div class="form-section">
       <div class="section-label" data-i18n="section_project">Progetto</div>
       <div class="input-group">
@@ -447,8 +310,11 @@
       </div>
     </div>
 
+    <!-- Academic -->
     <div class="form-section">
       <div class="section-label" data-i18n="section_academic">Percorso accademico</div>
+
+      <!-- Tesista toggle -->
       <div class="toggle-container">
         <div>
           <div class="toggle-label-text" data-i18n="label_tesista">Sei un tesista?</div>
@@ -460,7 +326,9 @@
           <div class="toggle-knob"></div>
         </label>
       </div>
-      <div class="conditional-field" id="anno-container">
+
+      <!-- Anno di corso (visible when NOT tesista) -->
+      <div class="conditional-field visible" id="anno-container">
         <div class="input-group">
           <label for="anno_corso" data-i18n="label_anno">Anno di corso</label>
           <select id="anno_corso">
@@ -471,6 +339,25 @@
           </select>
           <div class="error-msg" id="anno-error" data-i18n="err_anno">Seleziona l'anno di corso</div>
         </div>
+      </div>
+
+      <!-- Thesis type: singola / gruppo (visible when tesista ON) -->
+      <div class="conditional-field" id="thesis-type-container">
+        <div class="toggle-container" style="padding-top:4px">
+          <div>
+            <div class="toggle-label-text" data-i18n="label_thesis_type">Tipo di tesi</div>
+          </div>
+        </div>
+        <div class="segmented-control" id="thesis-segmented">
+          <button type="button" class="seg-btn active" data-value="single" data-i18n="seg_single">Singola</button>
+          <button type="button" class="seg-btn" data-value="group" data-i18n="seg_group">Di gruppo</button>
+        </div>
+      </div>
+
+      <!-- Group members (visible when tesista ON + group) -->
+      <div class="conditional-field" id="group-container">
+        <div class="group-members-container" id="group-members"></div>
+        <button type="button" class="add-member-btn" id="addMemberBtn" data-i18n="btn_add_member">+ Aggiungi membro del gruppo</button>
       </div>
     </div>
 
@@ -497,6 +384,9 @@
 <footer class="footer">Perforce User Management System — NABA</footer>
 
 <script>
+  // ══════════════════════════════════════
+  // i18n
+  // ══════════════════════════════════════
   const translations = {
     it: {
       title: 'Iscrizione server Perforce NABA',
@@ -513,9 +403,16 @@
       label_anno: 'Anno di corso', opt_select_anno: 'Seleziona anno',
       opt_anno_1: '1° Anno', opt_anno_2: '2° Anno', opt_anno_3: '3° Anno',
       err_anno: 'Seleziona l\'anno di corso',
+      label_thesis_type: 'Tipo di tesi',
+      seg_single: 'Singola', seg_group: 'Di gruppo',
+      btn_add_member: '+ Aggiungi membro del gruppo',
+      member_label: 'Membro',
+      member_nome: 'Nome', member_cognome: 'Cognome', member_email: 'Email',
+      member_ph_nome: 'Nome', member_ph_cognome: 'Cognome', member_ph_email: 'email@studenti.naba.it',
       btn_submit: 'Invia richiesta',
       msg_success: 'Richiesta inviata con successo. Il tuo account verrà creato a breve.',
-      msg_error: 'Si è verificato un errore: {err}. Riprova più tardi.'
+      msg_error: 'Si è verificato un errore: {err}. Riprova più tardi.',
+      err_member_nome: 'Inserisci il nome', err_member_cognome: 'Inserisci il cognome', err_member_email: 'Email non valida'
     },
     en: {
       title: 'Perforce NABA Server Registration',
@@ -524,7 +421,7 @@
       label_nome: 'First name', ph_nome: 'John', err_nome: 'Enter your first name',
       label_cognome: 'Last name', ph_cognome: 'Doe', err_cognome: 'Enter your last name',
       section_contact: 'Contact',
-      label_email: 'Email', ph_email: 'john.doe@university.edu', err_email: 'Enter a valid email address',
+      label_email: 'Email', ph_email: 'john.doe@studenti.naba.it', err_email: 'Enter a valid email address',
       section_project: 'Project',
       label_team: 'Team / project name', ph_team: 'e.g. ProjectAlpha', err_team: 'Enter the team name',
       section_academic: 'Academic path',
@@ -532,42 +429,59 @@
       label_anno: 'Year of study', opt_select_anno: 'Select year',
       opt_anno_1: '1st Year', opt_anno_2: '2nd Year', opt_anno_3: '3rd Year',
       err_anno: 'Select the year of study',
+      label_thesis_type: 'Thesis type',
+      seg_single: 'Individual', seg_group: 'Group',
+      btn_add_member: '+ Add group member',
+      member_label: 'Member',
+      member_nome: 'First name', member_cognome: 'Last name', member_email: 'Email',
+      member_ph_nome: 'First name', member_ph_cognome: 'Last name', member_ph_email: 'email@studenti.naba.it',
       btn_submit: 'Submit request',
       msg_success: 'Request submitted successfully. Your account will be created shortly.',
-      msg_error: 'An error occurred: {err}. Please try again later.'
+      msg_error: 'An error occurred: {err}. Please try again later.',
+      err_member_nome: 'Enter the name', err_member_cognome: 'Enter the last name', err_member_email: 'Invalid email'
     }
   };
 
   let currentLang = 'it';
+  let memberCount = 0;
+  let thesisType = 'single';
+
+  function t(key) { return translations[currentLang][key] || key; }
 
   function setLang(lang) {
     currentLang = lang;
     document.documentElement.lang = lang;
-    const t = translations[lang];
+    const tr = translations[lang];
     document.querySelectorAll('[data-i18n]').forEach(el => {
-      const key = el.getAttribute('data-i18n');
-      if (t[key]) el.textContent = t[key];
+      const k = el.getAttribute('data-i18n');
+      if (tr[k]) el.textContent = tr[k];
     });
     document.querySelectorAll('[data-i18n-html]').forEach(el => {
-      const key = el.getAttribute('data-i18n-html');
-      if (t[key]) el.innerHTML = t[key];
+      const k = el.getAttribute('data-i18n-html');
+      if (tr[k]) el.innerHTML = tr[k];
     });
     document.querySelectorAll('[data-i18n-ph]').forEach(el => {
-      const key = el.getAttribute('data-i18n-ph');
-      if (t[key]) el.placeholder = t[key];
+      const k = el.getAttribute('data-i18n-ph');
+      if (tr[k]) el.placeholder = tr[k];
     });
     document.querySelectorAll('.lang-btn').forEach(btn => {
-      const val = btn.getAttribute('data-lang');
-      btn.classList.toggle('active', val === lang);
+      btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
+    });
+    // Re-translate member cards
+    document.querySelectorAll('.member-card').forEach((card, i) => {
+      card.querySelector('.member-number').textContent = `${tr.member_label} ${i + 1}`;
+      card.querySelectorAll('label')[0].textContent = tr.member_nome;
+      card.querySelectorAll('label')[1].textContent = tr.member_cognome;
+      card.querySelectorAll('label')[2].textContent = tr.member_email;
+      card.querySelectorAll('input')[0].placeholder = tr.member_ph_nome;
+      card.querySelectorAll('input')[1].placeholder = tr.member_ph_cognome;
+      card.querySelectorAll('input')[2].placeholder = tr.member_ph_email;
     });
   }
 
-  // Attach data-lang to buttons for cleaner matching
-  document.querySelectorAll('.lang-btn').forEach(btn => {
-    const map = { 'IT': 'it', 'EN': 'en' };
-    btn.setAttribute('data-lang', map[btn.textContent.trim()] || '');
-  });
-
+  // ══════════════════════════════════════
+  // Elements
+  // ══════════════════════════════════════
   const nomeEl = document.getElementById('nome');
   const cognomeEl = document.getElementById('cognome');
   const emailEl = document.getElementById('email');
@@ -575,6 +489,10 @@
   const tesistaEl = document.getElementById('tesista');
   const annoContainer = document.getElementById('anno-container');
   const annoEl = document.getElementById('anno_corso');
+  const thesisTypeContainer = document.getElementById('thesis-type-container');
+  const groupContainer = document.getElementById('group-container');
+  const groupMembers = document.getElementById('group-members');
+  const addMemberBtn = document.getElementById('addMemberBtn');
   const form = document.getElementById('regForm');
   const submitBtn = document.getElementById('submitBtn');
   const statusMsg = document.getElementById('statusMsg');
@@ -584,51 +502,163 @@
   const previewUsername = document.getElementById('preview-username');
   const previewFullname = document.getElementById('preview-fullname');
 
+  // ══════════════════════════════════════
+  // Utilities
+  // ══════════════════════════════════════
   function sanitize(str) {
-    return str.trim().toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]/g, '');
+    return str.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
   }
-
   function capitalize(str) {
     return str.trim().replace(/\b\w/g, c => c.toUpperCase());
   }
 
+  // ══════════════════════════════════════
+  // Preview
+  // ══════════════════════════════════════
   function updatePreview() {
-    const n = nomeEl.value.trim();
-    const c = cognomeEl.value.trim();
+    const n = nomeEl.value.trim(), c = cognomeEl.value.trim();
     if (n || c) {
-      const username = [sanitize(n), sanitize(c)].filter(Boolean).join('_');
-      const fullname = [capitalize(n), capitalize(c)].filter(Boolean).join(' ');
-      previewUsername.textContent = username || '—';
-      previewFullname.textContent = fullname || '—';
-      pillUsername.classList.toggle('active', username.length > 0);
-      pillFullname.classList.toggle('active', fullname.length > 0);
+      const uname = [sanitize(n), sanitize(c)].filter(Boolean).join('_');
+      const fname = [capitalize(n), capitalize(c)].filter(Boolean).join(' ');
+      previewUsername.textContent = uname || '—';
+      previewFullname.textContent = fname || '—';
+      pillUsername.classList.toggle('active', uname.length > 0);
+      pillFullname.classList.toggle('active', fname.length > 0);
     } else {
-      previewUsername.textContent = '—';
-      previewFullname.textContent = '—';
-      pillUsername.classList.remove('active');
-      pillFullname.classList.remove('active');
+      previewUsername.textContent = '—'; previewFullname.textContent = '—';
+      pillUsername.classList.remove('active'); pillFullname.classList.remove('active');
     }
   }
-
   nomeEl.addEventListener('input', updatePreview);
   cognomeEl.addEventListener('input', updatePreview);
 
-  function updateAnnoVisibility() {
-    if (tesistaEl.checked) {
-      annoContainer.classList.remove('visible');
-      annoEl.value = '';
+  function updateMemberPreview(card) {
+    const n = card.querySelectorAll('input')[0].value.trim();
+    const c = card.querySelectorAll('input')[1].value.trim();
+    const pu = card.querySelector('.m-pill-username');
+    const pf = card.querySelector('.m-pill-fullname');
+    const pillU = card.querySelector('.m-preview-username');
+    const pillF = card.querySelector('.m-preview-fullname');
+    if (n || c) {
+      const uname = [sanitize(n), sanitize(c)].filter(Boolean).join('_');
+      const fname = [capitalize(n), capitalize(c)].filter(Boolean).join(' ');
+      pillU.textContent = uname || '—'; pillF.textContent = fname || '—';
+      pu.classList.toggle('active', uname.length > 0);
+      pf.classList.toggle('active', fname.length > 0);
     } else {
-      annoContainer.classList.add('visible');
+      pillU.textContent = '—'; pillF.textContent = '—';
+      pu.classList.remove('active'); pf.classList.remove('active');
     }
   }
 
-  tesistaEl.addEventListener('change', updateAnnoVisibility);
-  updateAnnoVisibility();
+  // ══════════════════════════════════════
+  // Tesista / Anno / Thesis type logic
+  // ══════════════════════════════════════
+  function updateVisibility() {
+    const isTesista = tesistaEl.checked;
+    if (isTesista) {
+      annoContainer.classList.remove('visible');
+      annoEl.value = '';
+      thesisTypeContainer.classList.add('visible');
+      updateGroupVisibility();
+    } else {
+      annoContainer.classList.add('visible');
+      thesisTypeContainer.classList.remove('visible');
+      groupContainer.classList.remove('visible');
+    }
+  }
 
+  function updateGroupVisibility() {
+    if (thesisType === 'group') {
+      groupContainer.classList.add('visible');
+      if (memberCount === 0) addMember();
+    } else {
+      groupContainer.classList.remove('visible');
+    }
+  }
+
+  tesistaEl.addEventListener('change', updateVisibility);
+  updateVisibility();
+
+  // Segmented control
+  document.querySelectorAll('#thesis-segmented .seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#thesis-segmented .seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      thesisType = btn.getAttribute('data-value');
+      updateGroupVisibility();
+    });
+  });
+
+  // ══════════════════════════════════════
+  // Group members
+  // ══════════════════════════════════════
+  function addMember() {
+    memberCount++;
+    const idx = memberCount;
+    const tr = translations[currentLang];
+    const card = document.createElement('div');
+    card.className = 'member-card';
+    card.setAttribute('data-member-id', idx);
+    card.innerHTML = `
+      <div class="member-header">
+        <span class="member-number">${tr.member_label} ${idx}</span>
+        <button type="button" class="remove-member-btn" onclick="removeMember(this)">&times;</button>
+      </div>
+      <div class="input-row">
+        <div class="input-group">
+          <label>${tr.member_nome}</label>
+          <input type="text" placeholder="${tr.member_ph_nome}" oninput="updateMemberPreview(this.closest('.member-card'))">
+        </div>
+        <div class="input-group">
+          <label>${tr.member_cognome}</label>
+          <input type="text" placeholder="${tr.member_ph_cognome}" oninput="updateMemberPreview(this.closest('.member-card'))">
+        </div>
+      </div>
+      <div class="input-group">
+        <label>${tr.member_email}</label>
+        <input type="email" placeholder="${tr.member_ph_email}">
+      </div>
+      <div class="preview-bar">
+        <div class="preview-pill m-pill-username">
+          <span class="pill-label">Username</span>
+          <span class="pill-value m-preview-username">—</span>
+        </div>
+        <div class="preview-pill m-pill-fullname">
+          <span class="pill-label">Full name</span>
+          <span class="pill-value m-preview-fullname">—</span>
+        </div>
+      </div>
+    `;
+    groupMembers.appendChild(card);
+  }
+
+  window.removeMember = function(btn) {
+    const card = btn.closest('.member-card');
+    card.style.opacity = '0';
+    card.style.transform = 'translateY(-8px)';
+    card.style.transition = 'all 0.2s ease';
+    setTimeout(() => {
+      card.remove();
+      renumberMembers();
+    }, 200);
+  };
+
+  function renumberMembers() {
+    const tr = translations[currentLang];
+    document.querySelectorAll('.member-card').forEach((card, i) => {
+      card.querySelector('.member-number').textContent = `${tr.member_label} ${i + 1}`;
+    });
+  }
+
+  addMemberBtn.addEventListener('click', addMember);
+
+  // ══════════════════════════════════════
+  // Validation
+  // ══════════════════════════════════════
   function showError(id, show) {
     const el = document.getElementById(id);
+    if (!el) return;
     const input = el.previousElementSibling;
     el.classList.toggle('visible', show);
     if (input) input.classList.toggle('error', show);
@@ -641,6 +671,17 @@
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailEl.value.trim())) { showError('email-error', true); valid = false; } else showError('email-error', false);
     if (!teamEl.value.trim()) { showError('team-error', true); valid = false; } else showError('team-error', false);
     if (!tesistaEl.checked && !annoEl.value) { showError('anno-error', true); valid = false; } else showError('anno-error', false);
+
+    // Validate group members if applicable
+    if (tesistaEl.checked && thesisType === 'group') {
+      document.querySelectorAll('.member-card').forEach(card => {
+        const inputs = card.querySelectorAll('input');
+        const n = inputs[0], c = inputs[1], e = inputs[2];
+        if (!n.value.trim()) { n.classList.add('error'); valid = false; } else n.classList.remove('error');
+        if (!c.value.trim()) { c.classList.add('error'); valid = false; } else c.classList.remove('error');
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.value.trim())) { e.classList.add('error'); valid = false; } else e.classList.remove('error');
+      });
+    }
     return valid;
   }
 
@@ -652,6 +693,9 @@
   });
   annoEl.addEventListener('change', () => showError('anno-error', false));
 
+  // ══════════════════════════════════════
+  // Submit
+  // ══════════════════════════════════════
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     statusMsg.className = 'status-message';
@@ -661,7 +705,8 @@
     const cognome = cognomeEl.value.trim();
     const isTesista = tesistaEl.checked;
 
-    const payload = {
+    // Build main user payload
+    const mainUser = {
       timestamp: new Date().toISOString(),
       username: sanitize(nome) + '_' + sanitize(cognome),
       full_name: capitalize(nome) + ' ' + capitalize(cognome),
@@ -672,35 +717,62 @@
       status: 'pending'
     };
 
+    // Collect all payloads (main + group members)
+    const allUsers = [mainUser];
+
+    if (isTesista && thesisType === 'group') {
+      document.querySelectorAll('.member-card').forEach(card => {
+        const inputs = card.querySelectorAll('input');
+        const mn = inputs[0].value.trim();
+        const mc = inputs[1].value.trim();
+        const me = inputs[2].value.trim();
+        allUsers.push({
+          timestamp: new Date().toISOString(),
+          username: sanitize(mn) + '_' + sanitize(mc),
+          full_name: capitalize(mn) + ' ' + capitalize(mc),
+          email: me.toLowerCase(),
+          team: teamEl.value.trim(),
+          tesista: 'yes',
+          anno_corso: '',
+          status: 'pending'
+        });
+      });
+    }
+
     submitBtn.classList.add('loading');
     submitBtn.disabled = true;
-    const t = translations[currentLang];
+    const tr = translations[currentLang];
 
     try {
-      // ── Cloudflare Worker proxy (il token è nascosto nel worker) ──
-      // Sostituisci con l'URL del tuo Worker dopo il deploy
-      const WORKER_URL = 'https://perforce-registration.tech-0a4.workers.dev/';
+      const WORKER_URL = 'https://perforce-registration.YOUR_SUBDOMAIN.workers.dev';
 
-      const response = await fetch(WORKER_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_data: JSON.stringify(payload) })
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        statusMsg.className = 'status-message success';
-        statusText.textContent = t.msg_success;
-        form.reset();
-        updatePreview();
-        updateAnnoVisibility();
-      } else {
-        throw new Error(result.error || `HTTP ${response.status}`);
+      // Send each user as a separate request
+      for (const user of allUsers) {
+        const response = await fetch(WORKER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_data: JSON.stringify(user) })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || `HTTP ${response.status}`);
+        }
       }
+
+      statusMsg.className = 'status-message success';
+      statusText.textContent = tr.msg_success;
+      form.reset();
+      groupMembers.innerHTML = '';
+      memberCount = 0;
+      thesisType = 'single';
+      document.querySelectorAll('#thesis-segmented .seg-btn').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-value') === 'single');
+      });
+      updatePreview();
+      updateVisibility();
     } catch (err) {
       statusMsg.className = 'status-message error';
-      statusText.textContent = t.msg_error.replace('{err}', err.message);
+      statusText.textContent = tr.msg_error.replace('{err}', err.message);
     } finally {
       submitBtn.classList.remove('loading');
       submitBtn.disabled = false;
