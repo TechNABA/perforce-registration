@@ -677,34 +677,26 @@
     const t = translations[currentLang];
 
     try {
-      const OWNER = 'TechNABA';
-      const REPO = 'perforce-registration';
-      const GITHUB_PAT = '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';
+      // ── Cloudflare Worker proxy (il token è nascosto nel worker) ──
+      // Sostituisci con l'URL del tuo Worker dopo il deploy
+      const WORKER_URL = 'https://perforce-registration.tech-0a4.workers.dev/';
 
-      const response = await fetch(
-        `https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/register.yml/dispatches`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `token ${GITHUB_PAT}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            ref: 'main',
-            inputs: { user_data: JSON.stringify(payload) }
-          })
-        }
-      );
+      const response = await fetch(WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_data: JSON.stringify(payload) })
+      });
 
-      if (response.status === 204) {
+      const result = await response.json();
+
+      if (response.ok && result.success) {
         statusMsg.className = 'status-message success';
         statusText.textContent = t.msg_success;
         form.reset();
         updatePreview();
         updateAnnoVisibility();
       } else {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(result.error || `HTTP ${response.status}`);
       }
     } catch (err) {
       statusMsg.className = 'status-message error';
