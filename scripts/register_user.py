@@ -225,37 +225,55 @@ def main():
         sys.exit(1)
 
     try:
-        new_user = json.loads(raw)
+        parsed = json.loads(raw)
     except json.JSONDecodeError as e:
         print(f"ERROR: Invalid JSON in USER_DATA: {e}")
         sys.exit(1)
 
-    # Validate required fields
-    required = ["username", "full_name", "email", "team"]
-    missing = [f for f in required if not new_user.get(f, "").strip()]
-    if missing:
-        print(f"ERROR: Missing required fields: {', '.join(missing)}")
+    # Support both single user (dict) and batch (list)
+    if isinstance(parsed, dict):
+        new_users = [parsed]
+    elif isinstance(parsed, list):
+        new_users = parsed
+    else:
+        print("ERROR: USER_DATA must be a JSON object or array")
         sys.exit(1)
 
-    # Normalize the row to match FIELDS
-    row = {field: new_user.get(field, "") for field in FIELDS}
-    if not row["status"]:
-        row["status"] = "pending"
+    if not new_users:
+        print("ERROR: No users to register")
+        sys.exit(1)
 
-    # Check for duplicate username
+    print(f"Processing {len(new_users)} user(s)...")
+
+    # Load existing data
     existing = read_csv()
     usernames = {r["username"].strip().lower() for r in existing}
-    if row["username"].strip().lower() in usernames:
-        print(f"WARNING: Username '{row['username']}' already exists. Adding anyway with note.")
-        row["status"] = "duplicate"
 
-    # Append and sort
-    existing.append(row)
+    # Validate and append each user
+    required = ["username", "full_name", "email", "team"]
+    for i, new_user in enumerate(new_users, start=1):
+        missing = [f for f in required if not new_user.get(f, "").strip()]
+        if missing:
+            print(f"WARNING: User {i} missing fields: {', '.join(missing)} — skipping")
+            continue
+
+        row = {field: new_user.get(field, "") for field in FIELDS}
+        if not row["status"]:
+            row["status"] = "pending"
+
+        if row["username"].strip().lower() in usernames:
+            print(f"WARNING: Username '{row['username']}' already exists. Adding with 'duplicate' status.")
+            row["status"] = "duplicate"
+
+        existing.append(row)
+        usernames.add(row["username"].strip().lower())
+        print(f"  + {row['username']} ({row['full_name']}) → {row['team']}")
+
+    # Sort and write
     existing.sort(key=sort_key)
 
-    # Write both files
     write_csv(existing)
-    print(f"CSV updated: {CSV_PATH} ({len(existing)} total users)")
+    print(f"\nCSV updated: {CSV_PATH} ({len(existing)} total users)")
 
     write_xlsx(existing)
     print(f"XLSX updated: {XLSX_PATH}")
