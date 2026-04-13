@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Perforce NABA — Iscrizione</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #000000;
+    --surface: #1c1c1e;
+    --text-primary: #f5f5f7;
+    --text-secondary: #a1a1a6;
+    --text-tertiary: #6e6e73;
+    --accent: #0a84ff;
+    --accent-hover: #409cff;
+    --accent-light: rgba(10, 132, 255, 0.12);
+    --border: rgba(255, 255, 255, 0.08);
+    --error: #ff453a;
+    --error-bg: rgba(255, 69, 58, 0.12);
+    --success: #30d158;
+    --success-bg: rgba(48, 209, 88, 0.12);
+    --input-bg: #2c2c2e;
+    --radius-sm: 10px;
+    --radius-lg: 20px;
+    --shadow-md: 0 4px 24px rgba(0,0,0,0.4), 0 1px 4px rgba(0,0,0,0.3);
+    --font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Helvetica Neue', sans-serif;
+    --transition: 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .lang-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: flex-end;
+    padding: 16px 24px;
+    z-index: 100;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%);
+    pointer-events: none;
+  }
+
+  .lang-switcher {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    overflow: hidden;
+    pointer-events: all;
+  }
+
+  .lang-btn {
+    padding: 7px 16px;
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition);
+    position: relative;
+  }
+
+  .lang-btn:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: 0; top: 6px; bottom: 6px;
+    width: 1px;
+    background: var(--border);
+  }
+
+  .lang-btn.active {
+    color: var(--text-primary);
+    background: rgba(255,255,255,0.06);
+  }
+
+  .lang-btn:hover:not(.active) { color: var(--text-secondary); }
+
+  .hero {
+    text-align: center;
+    padding: 80px 24px 48px;
+    max-width: 680px;
+  }
+
+  .hero h1 {
+    font-size: clamp(32px, 5vw, 48px);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+  }
+
+  .hero p {
+    font-size: 17px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .form-card {
+    width: 100%;
+    max-width: 580px;
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+    padding: 48px 40px;
+    margin: 0 24px 80px;
+    animation: cardIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .form-section { margin-bottom: 32px; }
+  .form-section:first-child { margin-bottom: 10px; }
+  .form-section:last-of-type { margin-bottom: 0; }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .input-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .input-group { position: relative; margin-bottom: 12px; }
+  .input-row .input-group { margin-bottom: 0; }
+
+  .input-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    transition: color var(--transition);
+  }
+
+  .input-group:focus-within label { color: var(--accent); }
+
+  .input-group input,
+  .input-group select {
+    width: 100%;
+    height: 48px;
+    padding: 0 16px;
+    font-family: var(--font);
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--text-primary);
+    background: var(--input-bg);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    outline: none;
+    transition: all var(--transition);
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  .input-group input::placeholder { color: var(--text-tertiary); font-weight: 300; }
+
+  .input-group input:focus,
+  .input-group select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-light);
+    background: #3a3a3c;
+  }
+
+  .input-group input.error {
+    border-color: var(--error);
+    box-shadow: 0 0 0 3px var(--error-bg);
+  }
+
+  .input-group select {
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' fill='none' stroke='%236e6e73' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    padding-right: 40px;
+  }
+
+  .error-msg {
+    font-size: 12px;
+    color: var(--error);
+    margin-top: 4px;
+    display: none;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .error-msg.visible { display: flex; }
+
+  .preview-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+    min-height: 36px;
+  }
+
+  .preview-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    transition: all var(--transition);
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  .preview-pill.active { opacity: 1; transform: translateY(0); }
+
+  .preview-pill .pill-label {
+    font-weight: 500;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .preview-pill .pill-value {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+    font-size: 13px;
+  }
+
+  .toggle-container { display: flex; align-items: center; gap: 16px; padding: 14px 0; }
+  .toggle-label-text { font-size: 15px; font-weight: 500; color: var(--text-primary); flex: 1; }
+  .toggle-sublabel { font-size: 13px; font-weight: 400; color: var(--text-tertiary); margin-top: 2px; }
+
+  .toggle-switch { position: relative; width: 51px; height: 31px; flex-shrink: 0; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+
+  .toggle-track {
+    position: absolute; inset: 0;
+    background: #48484a;
+    border-radius: 31px;
+    cursor: pointer;
+    transition: background var(--transition);
+  }
+
+  .toggle-switch input:checked + .toggle-track { background: var(--success); }
+
+  .toggle-knob {
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 27px; height: 27px;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    transition: transform var(--transition);
+    pointer-events: none;
+  }
+
+  .toggle-switch input:checked ~ .toggle-knob { transform: translateX(20px); }
+
+  .conditional-field {
+    overflow: hidden;
+    max-height: 0; opacity: 0;
+    transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, margin 0.3s ease;
+    margin-top: 0;
+  }
+
+  .conditional-field.visible { max-height: 120px; opacity: 1; margin-top: 12px; }
+
+  .submit-btn {
+    width: 100%;
+    height: 52px;
+    margin-top: 36px;
+    background: #f5f5f7;
+    color: #1c1c1e;
+    font-family: var(--font);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all var(--transition);
+  }
+
+  .submit-btn:hover {
+    background: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.15);
+  }
+
+  .submit-btn:active { transform: translateY(0); box-shadow: none; }
+  .submit-btn:disabled { background: #48484a; color: #86868b; cursor: not-allowed; transform: none; box-shadow: none; }
+  .submit-btn .btn-text { transition: opacity 0.2s; }
+
+  .submit-btn .btn-spinner {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 0.2s;
+  }
+
+  .submit-btn.loading .btn-text { opacity: 0; }
+  .submit-btn.loading .btn-spinner { opacity: 1; }
+
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2.5px solid rgba(28,28,30,0.3);
+    border-top-color: #1c1c1e;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .status-message {
+    margin-top: 16px;
+    padding: 14px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    animation: statusIn 0.3s ease;
+  }
+
+  @keyframes statusIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .status-message.success {
+    display: flex;
+    background: var(--success-bg);
+    color: var(--success);
+    border: 1px solid rgba(48, 209, 88, 0.2);
+  }
+
+  .status-message.error {
+    display: flex;
+    background: var(--error-bg);
+    color: var(--error);
+    border: 1px solid rgba(255, 69, 58, 0.15);
+  }
+
+  .status-icon { width: 20px; height: 20px; flex-shrink: 0; }
+
+  .footer { text-align: center; padding: 24px; font-size: 12px; color: var(--text-tertiary); }
+
+  @media (max-width: 600px) {
+    .hero { padding: 72px 20px 32px; }
+    .form-card { padding: 32px 24px; margin: 0 16px 60px; }
+    .input-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="lang-bar">
+  <div class="lang-switcher">
+    <button class="lang-btn active" onclick="setLang('it')">IT</button>
+    <button class="lang-btn" onclick="setLang('en')">EN</button>
+  </div>
+</div>
+
+<header class="hero">
+  <h1 data-i18n="title">Iscrizione server Perforce NABA</h1>
+  <p data-i18n-html="subtitle">Compila il modulo per richiedere il tuo account.<br>I tuoi dati verranno elaborati per la creazione dell'utente.</p>
+</header>
+
+<main class="form-card">
+  <form id="regForm" novalidate>
+
+    <div class="form-section">
+      <div class="section-label" data-i18n="section_identity">Identità</div>
+      <div class="input-row">
+        <div class="input-group">
+          <label for="nome" data-i18n="label_nome">Nome</label>
+          <input type="text" id="nome" data-i18n-ph="ph_nome" placeholder="Mario" autocomplete="given-name" required>
+          <div class="error-msg" id="nome-error" data-i18n="err_nome">Inserisci il tuo nome</div>
+        </div>
+        <div class="input-group">
+          <label for="cognome" data-i18n="label_cognome">Cognome</label>
+          <input type="text" id="cognome" data-i18n-ph="ph_cognome" placeholder="Rossi" autocomplete="family-name" required>
+          <div class="error-msg" id="cognome-error" data-i18n="err_cognome">Inserisci il tuo cognome</div>
+        </div>
+      </div>
+      <div class="preview-bar">
+        <div class="preview-pill" id="pill-username">
+          <span class="pill-label">Username</span>
+          <span class="pill-value" id="preview-username">—</span>
+        </div>
+        <div class="preview-pill" id="pill-fullname">
+          <span class="pill-label">Full name</span>
+          <span class="pill-value" id="preview-fullname">—</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-label" data-i18n="section_contact">Contatto</div>
+      <div class="input-group">
+        <label for="email" data-i18n="label_email">Email</label>
+        <input type="email" id="email" data-i18n-ph="ph_email" placeholder="mario.rossi@studenti.naba.it" autocomplete="email" required>
+        <div class="error-msg" id="email-error" data-i18n="err_email">Inserisci un indirizzo email valido</div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-label" data-i18n="section_project">Progetto</div>
+      <div class="input-group">
+        <label for="team" data-i18n="label_team">Nome del team / progetto</label>
+        <input type="text" id="team" data-i18n-ph="ph_team" placeholder="es. ProjectAlpha" required>
+        <div class="error-msg" id="team-error" data-i18n="err_team">Inserisci il nome del team</div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-label" data-i18n="section_academic">Percorso accademico</div>
+      <div class="toggle-container">
+        <div>
+          <div class="toggle-label-text" data-i18n="label_tesista">Sei un tesista?</div>
+          <div class="toggle-sublabel" data-i18n="sublabel_tesista">I tesisti non richiedono anno di corso</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="tesista">
+          <div class="toggle-track"></div>
+          <div class="toggle-knob"></div>
+        </label>
+      </div>
+      <div class="conditional-field" id="anno-container">
+        <div class="input-group">
+          <label for="anno_corso" data-i18n="label_anno">Anno di corso</label>
+          <select id="anno_corso">
+            <option value="" disabled selected data-i18n="opt_select_anno">Seleziona anno</option>
+            <option value="1" data-i18n="opt_anno_1">1° Anno</option>
+            <option value="2" data-i18n="opt_anno_2">2° Anno</option>
+            <option value="3" data-i18n="opt_anno_3">3° Anno</option>
+          </select>
+          <div class="error-msg" id="anno-error" data-i18n="err_anno">Seleziona l'anno di corso</div>
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="submit-btn" id="submitBtn">
+      <span class="btn-text" data-i18n="btn_submit">Invia richiesta</span>
+      <span class="btn-spinner"><span class="spinner"></span></span>
+    </button>
+
+    <div class="status-message" id="statusMsg">
+      <svg class="status-icon success-icon" viewBox="0 0 20 20" fill="none">
+        <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M6 10.5L8.5 13L14 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <svg class="status-icon error-icon" viewBox="0 0 20 20" fill="none">
+        <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M7 7L13 13M13 7L7 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span id="statusText"></span>
+    </div>
+
+  </form>
+</main>
+
+<footer class="footer">Perforce User Management System — NABA</footer>
+
+<script>
+  const translations = {
+    it: {
+      title: 'Iscrizione server Perforce NABA',
+      subtitle: 'Compila il modulo per richiedere il tuo account.<br>I tuoi dati verranno elaborati per la creazione dell\'utente.',
+      section_identity: 'Identità',
+      label_nome: 'Nome', ph_nome: 'Mario', err_nome: 'Inserisci il tuo nome',
+      label_cognome: 'Cognome', ph_cognome: 'Rossi', err_cognome: 'Inserisci il tuo cognome',
+      section_contact: 'Contatto',
+      label_email: 'Email', ph_email: 'mario.rossi@studenti.naba.it', err_email: 'Inserisci un indirizzo email valido',
+      section_project: 'Progetto',
+      label_team: 'Nome del team / progetto', ph_team: 'es. ProjectAlpha', err_team: 'Inserisci il nome del team',
+      section_academic: 'Percorso accademico',
+      label_tesista: 'Sei un tesista?', sublabel_tesista: 'I tesisti non richiedono anno di corso',
+      label_anno: 'Anno di corso', opt_select_anno: 'Seleziona anno',
+      opt_anno_1: '1° Anno', opt_anno_2: '2° Anno', opt_anno_3: '3° Anno',
+      err_anno: 'Seleziona l\'anno di corso',
+      btn_submit: 'Invia richiesta',
+      msg_success: 'Richiesta inviata con successo. Il tuo account verrà creato a breve.',
+      msg_error: 'Si è verificato un errore: {err}. Riprova più tardi.'
+    },
+    en: {
+      title: 'Perforce NABA Server Registration',
+      subtitle: 'Fill out the form to request your account.<br>Your data will be processed for user creation.',
+      section_identity: 'Identity',
+      label_nome: 'First name', ph_nome: 'John', err_nome: 'Enter your first name',
+      label_cognome: 'Last name', ph_cognome: 'Doe', err_cognome: 'Enter your last name',
+      section_contact: 'Contact',
+      label_email: 'Email', ph_email: 'john.doe@university.edu', err_email: 'Enter a valid email address',
+      section_project: 'Project',
+      label_team: 'Team / project name', ph_team: 'e.g. ProjectAlpha', err_team: 'Enter the team name',
+      section_academic: 'Academic path',
+      label_tesista: 'Are you a thesis student?', sublabel_tesista: 'Thesis students don\'t need to specify the year',
+      label_anno: 'Year of study', opt_select_anno: 'Select year',
+      opt_anno_1: '1st Year', opt_anno_2: '2nd Year', opt_anno_3: '3rd Year',
+      err_anno: 'Select the year of study',
+      btn_submit: 'Submit request',
+      msg_success: 'Request submitted successfully. Your account will be created shortly.',
+      msg_error: 'An error occurred: {err}. Please try again later.'
+    }
+  };
+
+  let currentLang = 'it';
+
+  function setLang(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang;
+    const t = translations[lang];
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      if (t[key]) el.textContent = t[key];
+    });
+    document.querySelectorAll('[data-i18n-html]').forEach(el => {
+      const key = el.getAttribute('data-i18n-html');
+      if (t[key]) el.innerHTML = t[key];
+    });
+    document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+      const key = el.getAttribute('data-i18n-ph');
+      if (t[key]) el.placeholder = t[key];
+    });
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+      const val = btn.getAttribute('data-lang');
+      btn.classList.toggle('active', val === lang);
+    });
+  }
+
+  // Attach data-lang to buttons for cleaner matching
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    const map = { 'IT': 'it', 'EN': 'en' };
+    btn.setAttribute('data-lang', map[btn.textContent.trim()] || '');
+  });
+
+  const nomeEl = document.getElementById('nome');
+  const cognomeEl = document.getElementById('cognome');
+  const emailEl = document.getElementById('email');
+  const teamEl = document.getElementById('team');
+  const tesistaEl = document.getElementById('tesista');
+  const annoContainer = document.getElementById('anno-container');
+  const annoEl = document.getElementById('anno_corso');
+  const form = document.getElementById('regForm');
+  const submitBtn = document.getElementById('submitBtn');
+  const statusMsg = document.getElementById('statusMsg');
+  const statusText = document.getElementById('statusText');
+  const pillUsername = document.getElementById('pill-username');
+  const pillFullname = document.getElementById('pill-fullname');
+  const previewUsername = document.getElementById('preview-username');
+  const previewFullname = document.getElementById('preview-fullname');
+
+  function sanitize(str) {
+    return str.trim().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '');
+  }
+
+  function capitalize(str) {
+    return str.trim().replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  function updatePreview() {
+    const n = nomeEl.value.trim();
+    const c = cognomeEl.value.trim();
+    if (n || c) {
+      const username = [sanitize(n), sanitize(c)].filter(Boolean).join('_');
+      const fullname = [capitalize(n), capitalize(c)].filter(Boolean).join(' ');
+      previewUsername.textContent = username || '—';
+      previewFullname.textContent = fullname || '—';
+      pillUsername.classList.toggle('active', username.length > 0);
+      pillFullname.classList.toggle('active', fullname.length > 0);
+    } else {
+      previewUsername.textContent = '—';
+      previewFullname.textContent = '—';
+      pillUsername.classList.remove('active');
+      pillFullname.classList.remove('active');
+    }
+  }
+
+  nomeEl.addEventListener('input', updatePreview);
+  cognomeEl.addEventListener('input', updatePreview);
+
+  function updateAnnoVisibility() {
+    if (tesistaEl.checked) {
+      annoContainer.classList.remove('visible');
+      annoEl.value = '';
+    } else {
+      annoContainer.classList.add('visible');
+    }
+  }
+
+  tesistaEl.addEventListener('change', updateAnnoVisibility);
+  updateAnnoVisibility();
+
+  function showError(id, show) {
+    const el = document.getElementById(id);
+    const input = el.previousElementSibling;
+    el.classList.toggle('visible', show);
+    if (input) input.classList.toggle('error', show);
+  }
+
+  function validateForm() {
+    let valid = true;
+    if (!nomeEl.value.trim()) { showError('nome-error', true); valid = false; } else showError('nome-error', false);
+    if (!cognomeEl.value.trim()) { showError('cognome-error', true); valid = false; } else showError('cognome-error', false);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailEl.value.trim())) { showError('email-error', true); valid = false; } else showError('email-error', false);
+    if (!teamEl.value.trim()) { showError('team-error', true); valid = false; } else showError('team-error', false);
+    if (!tesistaEl.checked && !annoEl.value) { showError('anno-error', true); valid = false; } else showError('anno-error', false);
+    return valid;
+  }
+
+  [nomeEl, cognomeEl, emailEl, teamEl].forEach(el => {
+    el.addEventListener('input', () => {
+      const errId = el.id + '-error';
+      if (document.getElementById(errId)) showError(errId, false);
+    });
+  });
+  annoEl.addEventListener('change', () => showError('anno-error', false));
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    statusMsg.className = 'status-message';
+    if (!validateForm()) return;
+
+    const nome = nomeEl.value.trim();
+    const cognome = cognomeEl.value.trim();
+    const isTesista = tesistaEl.checked;
+
+    const payload = {
+      timestamp: new Date().toISOString(),
+      username: sanitize(nome) + '_' + sanitize(cognome),
+      full_name: capitalize(nome) + ' ' + capitalize(cognome),
+      email: emailEl.value.trim().toLowerCase(),
+      team: teamEl.value.trim(),
+      tesista: isTesista ? 'yes' : 'no',
+      anno_corso: isTesista ? '' : annoEl.value,
+      status: 'pending'
+    };
+
+    submitBtn.classList.add('loading');
+    submitBtn.disabled = true;
+    const t = translations[currentLang];
+
+    try {
+      const OWNER = 'TechNABA';
+      const REPO = 'perforce-registration';
+      const GITHUB_PAT = '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';
+
+      const response = await fetch(
+        `https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/register.yml/dispatches`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `token ${GITHUB_PAT}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            ref: 'main',
+            inputs: { user_data: JSON.stringify(payload) }
+          })
+        }
+      );
+
+      if (response.status === 204) {
+        statusMsg.className = 'status-message success';
+        statusText.textContent = t.msg_success;
+        form.reset();
+        updatePreview();
+        updateAnnoVisibility();
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (err) {
+      statusMsg.className = 'status-message error';
+      statusText.textContent = t.msg_error.replace('{err}', err.message);
+    } finally {
+      submitBtn.classList.remove('loading');
+      submitBtn.disabled = false;
+    }
+  });
+</script>
+
+</body>
+</html>
