@@ -746,17 +746,15 @@
     try {
       const WORKER_URL = 'https://perforce-registration.tech-0a4.workers.dev/';
 
-      // Send each user as a separate request
-      for (const user of allUsers) {
-        const response = await fetch(WORKER_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_data: JSON.stringify(user) })
-        });
-        const result = await response.json();
-        if (!response.ok || !result.success) {
-          throw new Error(result.error || `HTTP ${response.status}`);
-        }
+      // Send all users in a single batch request
+      const response = await fetch(WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ users: allUsers })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || `HTTP ${response.status}`);
       }
 
       statusMsg.className = 'status-message success';
