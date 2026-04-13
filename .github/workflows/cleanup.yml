@@ -1,0 +1,36 @@
+name: Cleanup user data
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type CONFIRM to reset all user data'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'CONFIRM'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Reset CSV to empty header
+        run: echo 'timestamp,username,full_name,email,team,tesista,anno_corso,status' > data/users.csv
+
+      - name: Remove XLSX
+        run: rm -f data/users.xlsx
+
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/users.csv
+          git rm -f --ignore-unmatch data/users.xlsx
+          git diff --cached --quiet || git commit -m "cleanup: reset user data - $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git push
