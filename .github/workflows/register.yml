@@ -1,0 +1,44 @@
+name: Register new user
+
+on:
+  workflow_dispatch:
+    inputs:
+      user_data:
+        description: 'JSON string with user registration data'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: user-registration
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install openpyxl
+
+      - name: Run registration script
+        env:
+          USER_DATA: ${{ github.event.inputs.user_data }}
+        run: python scripts/register_user.py
+
+      - name: Commit and push updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/users.csv data/users.xlsx
+          git diff --cached --quiet || git commit -m "feat: new user registration - $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git push
