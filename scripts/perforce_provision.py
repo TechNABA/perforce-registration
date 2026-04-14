@@ -32,7 +32,7 @@ from pathlib import Path
 # ══════════════════════════════════════════════════════════════
 # CONFIGURATION — edit these to match your setup
 # ══════════════════════════════════════════════════════════════
-P4PORT = "10.150.3.1:1666"
+P4PORT = "perforce.naba.it:1666"
 P4USER = "villal"
 P4PASSWD = ""  # set at runtime via interactive prompt
 # ══════════════════════════════════════════════════════════════
@@ -312,6 +312,9 @@ Examples:
     parser.add_argument("--csv", type=Path, default=None, help="Path to users.csv (auto-detected if omitted)")
     parser.add_argument("--dry-run", action="store_true", help="Preview actions without making changes")
     parser.add_argument("--password", type=str, default=None, help="Initial password for new Perforce users")
+    parser.add_argument("--skip-discord", action="store_true", help="Skip Discord channel/role creation")
+    parser.add_argument("--skip-email", action="store_true", help="Skip sending welcome emails")
+    parser.add_argument("--category", type=str, default="Tesi", help="Discord category for new channels (default: Tesi)")
     args = parser.parse_args()
 
     # Ask for admin password interactively (hidden input)
@@ -408,10 +411,83 @@ Examples:
         print(f"CSV updated: {csv_path}")
 
     print(f"\n{'═' * 50}")
-    print(f"DONE: {success_count} succeeded, {error_count} errors")
+    print(f"PERFORCE: {success_count} succeeded, {error_count} errors")
 
     if args.dry_run:
         print("\n*** This was a dry run. Run again without --dry-run to apply. ***")
+
+    # ── Discord + Email integration ──
+    # Always offer Discord/Email setup after Perforce provisioning
+    if success_count == 0 and not args.dry_run:
+        print("\nNo users were provisioned — skipping Discord/Email.")
+        return
+
+    # Import the module (same directory as this script)
+    script_dir = str(Path(__file__).resolve().parent)
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+
+    try:
+        from discord_email_provision import provision_discord_and_email
+    except ImportError as e:
+        print(f"\n[WARNING] Cannot import discord_email_provision: {e}")
+        print("Make sure discord_email_provision.py is in the same folder as this script.")
+        print("Skipping Discord/Email setup.")
+        return
+
+    # Collect users to process
+    if args.dry_run:
+        target_users = pending  # status hasn't changed in dry-run
+    else:
+        target_users = [r for r in rows if r.get("status", "").strip().lower() == "created"]
+
+    if not target_users:
+        print("\nNo users to set up in Discord/Email.")
+        return
+
+    # Group by team
+    teams = {}
+    for u in target_users:
+        t = u["team"].strip()
+        if t not in teams:
+            teams[t] = []
+        teams[t].append(u)
+
+    print(f"\n{'═' * 50}")
+    print(f"DISCORD + EMAIL SETUP ({len(target_users)} users, {len(teams)} teams)")
+    print(f"{'═' * 50}")
+
+    # Ask for credentials
+    discord_token = None
+    resend_api_key = None
+
+    if not args.skip_discord:
+        discord_token = getpass.getpass("\nDiscord bot token (Enter to skip): ")
+        if not discord_token.strip():
+            discord_token = None
+            print("Skipping Discord.")
+
+    if not args.skip_email:
+        resend_api_key = getpass.getpass("Resend API key (Enter to skip): ")
+        if not resend_api_key.strip():
+            resend_api_key = None
+            print("Skipping emails.")
+
+    if not discord_token and not resend_api_key:
+        print("\nBoth skipped — nothing to do.")
+        return
+
+    for team, team_users in teams.items():
+        provision_discord_and_email(
+            users=team_users,
+            discord_token=discord_token,
+            resend_api_key=resend_api_key,
+            category_name=args.category,
+            dry_run=args.dry_run,
+        )
+
+    print(f"\n{'═' * 50}")
+    print("ALL DONE!")
 
 
 if __name__ == "__main__":
