@@ -1,5 +1,73 @@
 timestamp,username,full_name,email,team,tesista,anno_corso,status
-2026-04-14T13:30:08.794Z,maria_bianchi,Maria Bianchi,maria.bianchi@studenti.naba.it,Collateral,no,2,pending
-2026-04-14T13:18:43.495Z,jacopo_gennari,Jacopo Gennari,jacopo.gennari@studenti.naba.it,Hammerhead,no,3,pending
-2026-04-14T09:20:05.297Z,anna_rossi,Anna Rossi,annabrue05@gmail.com,slay,yes,,pending
-2026-04-13T17:53:02.939Z,leonardo_villa,Leonardo Villa,lvilla.personal@gmail.com,Trinity,yes,,pending
+2026-04-14T13:47:49.000Z,Camilla_Grigioni,Camilla_Grigioni,Camilla_Grigioni@naba.it,A_Soul_Chronicle,,,existing
+2026-04-14T13:47:49.000Z,Denise_Lanzo,Denise_Lanzo,Denise_Lanzo@naba.it,A_Soul_Chronicle,,,existing
+2026-04-14T13:47:49.000Z,Francesca_Radice,Francesca_Radice,Francesca_Radice@naba.ot,A_Soul_Chronicle,,,existing
+2026-04-14T13:47:49.000Z,Serena_Pellacani,Serena_Pellacani,Serena_Pellacani@naba.it,A_Soul_Chronicle,,,existing
+2026-04-14T13:47:49.000Z,Silvia_Liso,Silvia_Liso,Silvia_Liso@naba.it,A_Soul_Chronicle,,,existing
+2026-04-14T13:47:49.000Z,Federico_Mazzarella,Federico_Mazzarella,Federico_Mazzarella@naba.it,ArtBlock,,,existing
+2026-04-14T13:47:49.000Z,Francesco_Mariani,Francesco_Mariani,Francesco_Mariani@naba.it,ArtBlock,,,existing
+2026-04-14T13:47:49.000Z,Gaia_Colciago,Gaia_Colciago,Gaia_Colciago@naba.it,ArtBlock,,,existing
+2026-04-14T13:47:49.000Z,Luca_Sergio,Luca_Sergio,Luca_Sergio@naba.it,ArtBlock,,,existing
+2026-04-14T13:47:49.000Z,Stefania_Pedruzzi,Stefania_Pedruzzi,Stefania_Pedruzzi@naba.it,ArtBlock,,,existing
+2026-04-14T13:47:49.000Z,Alberto_Cervillio,Alberto_Cervillio,Alberto_Cervillio@naba.it,Astronaut,,,existing
+2026-04-14T13:47:49.000Z,Jacopo_Bruschi,Jacopo_Bruschi,Jacopo_Bruschi@naba-da.com,Astronaut,,,existing
+2026-04-14T13:47:49.000Z,Francesca_Huang,Francesca_Huang,Francesca_Huang@naba.it,BlackPlague,,,existing
+2026-04-14T13:47:49.000Z,Jiayi_Li,Jiayi_Li,Jiayi_Li@naba.it,BlackPlague,,,existing
+2026-04-14T13:47:49.000Z,Zhengying_Xu,Zhengying_Xu,Zhengying_Xu@naba.it,BlackPlague,,,existing
+2026-04-14T13:47:49.000Z,Ali_Fallahmoghadami,Ali Fallahmoghadami,Ali_Fallahmoghadami@naba.it,BloodAndButter,,,existing
+2026-04-14T13:47:49.000Z,Chen_Qilin,Chen Qilin,Chen_Qilin@naba.it,BloodAndButter,,,existing
+2026-04-14T13:47:49.000Z,Leonardo_Lago,Leonardo Lago,Leonardo_Lago@naba.it,BloodAndButter,,,existing
+2026-04-14T13:47:49.000Z,Lorenzo_Battista,Lorenzo Battista,Lorenzo_Battista@naba.it,BloodAndButter,,,existing
+2026-04-14T13:47:49.000Z,Oliviya_Khmelidze,Oliviya Khmelidze,Oliviya_Khmelidze@naba.it,BloodAndButter,,,existing
+2026-04-14T13:47:49.000Z,alessandro_cova,alessandro_cova,alessandro_cova@VS_MAIN,FloraExMachina,,,existing
+2026-04-14T13:47:49.000Z,denise_bottecchia,denise_bottecchia,denise_bottecchia@VS_MAIN,FloraExMachina,,,existing
+2026-04-14T13:47:49.000Z,kiyomi_corinti,kiyomi_corinti,kiyomi_corinti@VS_MAIN,FloraExMachina,,,existing
+2026-04-14T13:47:49.000Z,Julia_Bergman,Julia_Bergman,Julia_Bergman@naba.it,HideAndSeek,,,existing
+2026-04-14T13:47:49.000Z,Wilma_Sved,wilma sved,wilma_sved@studenti.naba.it,HideAndSeek,,,existing
+2026-04-14T13:47:49.000Z,Anastasia_Miani,Anastasia_Miani,Anastasia_Miani@naba.it,Imagery,,,existing
+2026-04-14T13:47:49.000Z,Lorenzo_Mari,Lorenzo_Mari,Lorenzo_Mari@naba.it,Imagery,,,existing
+2026-04-14T13:47:49.000Z,Lucrezia_D'Amico,Lucrezia_D'Amico,Lucrezia_D'Amico@naba.it,Imagery,,,existing
+2026-04-14T13:47:49.000Z,Mattia_Bombace,Mattia_Bombace,Mattia_Bombace@naba.it,Imagery,,,existing
+2026-04-14T13:47:49.000Z,Serena_Lin,Serena_Lin,Serena_Lin@naba.it,Imagery,,,existing
+2026-04-14T13:47:49.000Z,Youfan_Lin,Youfan_Lin,Youfan_Lin@naba.it,Imagery,,,existing
+2026-04-14T13:47:49.000Z,Bruno_Bisogno,Bruno_Bisogno,Bruno_Bisogno@naba.it,Kronos,,,existing
+2026-04-14T13:47:49.000Z,Gaia_Aprile,Gaia_Aprile,Gaia_Aprile@naba.it,Kronos,,,existing
+2026-04-14T13:47:49.000Z,Riccardo_Bassani,Riccardo_Bassani,Riccardo_Bassani@naba.it,Kronos,,,existing
+2026-04-14T13:47:49.000Z,Danilo_Puccio,Danilo_Puccio,Danilo_Puccio@naba.it,MidnightRunners,,,existing
+2026-04-14T13:47:49.000Z,Eros_Mussuto,Eros_Mussuto,Eros_Mussuto@naba.it,MidnightRunners,,,existing
+2026-04-14T13:47:49.000Z,Gianluca_Lucchini,Gianluca_Lucchini,Gianluca_Lucchini@naba.it,MidnightRunners,,,existing
+2026-04-14T13:47:49.000Z,Tommaso_Mancini,Tommaso_Mancini,Tommaso_Mancini@naba.it,MidnightRunners,,,existing
+2026-04-14T13:47:49.000Z,Valeria_Portillo,Valeria_Portillo,Valeria_Portillo@naba.it,MidnightRunners,,,existing
+2026-04-14T13:47:49.000Z,gabriele_dallari,gabriele_dallari,gabriele_dallari@VS_MAIN,Overload,,,existing
+2026-04-14T13:47:49.000Z,lorenzo_fiorentino,lorenzo_fiorentino,lorenzo_fiorentino@VS_MAIN,Overload,,,existing
+2026-04-14T13:47:49.000Z,luigi_cirelli,luigi_cirelli,luigi_cirelli@VS_MAIN,Overload,,,existing
+2026-04-14T13:47:49.000Z,riccardo_landoni,riccardo_landoni,riccardo_landoni@VS_MAIN,Overload,,,existing
+2026-04-14T13:47:49.000Z,Beatrice_Bessone,Beatrice_Bessone,Beatrice_Bessone@naba.it,Psicostasia,,,existing
+2026-04-14T13:47:49.000Z,Carmen_Alfano,Carmen_Alfano,Carmen_Alfano@naba.it,Psicostasia,,,existing
+2026-04-14T13:47:49.000Z,Emanuele_Boschi,Emanuele_Boschi,Emanuele_Boschi@naba.it,Psicostasia,,,existing
+2026-04-14T13:47:49.000Z,Ge_Jiang,Ge_Jiang,Ge_Jiang@naba.it,Psicostasia,,,existing
+2026-04-14T13:47:49.000Z,Haotian_Cheng,Haotian_Cheng,Haotian_Cheng@naba.it,Psicostasia,,,existing
+2026-04-14T13:47:49.000Z,Martina_Rotella,Martina_Rotella,Martina_Rotella@naba.it,Psicostasia,,,existing
+2026-04-14T13:47:49.000Z,isabella_bari,isabella_bari,isabella_bari@VS_MAIN,Reality,,,existing
+2026-04-14T13:47:49.000Z,maria_villarroel,maria_villarroel,maria_villarroel@VS_MAIN,Reality,,,existing
+2026-04-14T13:47:49.000Z,victor_fernandes,victor_fernandes,victor_fernandes@VS_MAIN,Reality,,,existing
+2026-04-14T13:47:49.000Z,Alessandro_Caime,Alessandro_Caime,Alessandro_Caime@naba.it,RitmoNulla,,,existing
+2026-04-14T13:47:49.000Z,Feng_Yuchen,Feng_Yuchen,Feng_Yuchen@naba.it,RitmoNulla,,,existing
+2026-04-14T13:47:49.000Z,Filippo_Damiano,Filippo_Damiano,Filippo_Damiano@naba.it,RitmoNulla,,,existing
+2026-04-14T13:47:49.000Z,Gaia_Cinti,Gaia_Cinti,Gaia_Cinti@naba.it,RitmoNulla,,,existing
+2026-04-14T13:47:49.000Z,Maria_Contesi,Maria_Contesi,Maria_Contesi@naba.it,RitmoNulla,,,existing
+2026-04-14T13:47:49.000Z,Raul_Chavez,Raul_Chavez,Raul_Chavez@naba.it,RitmoNulla,,,existing
+2026-04-14T13:47:49.000Z,Anna_Ebel,Anna_Ebel,Anna_Ebel@naba.it,Roots,,,existing
+2026-04-14T13:47:49.000Z,Ksenia_Puzankova,Ksenia_Puzankova,Ksenia_Puzankova@naba.it,Roots,,,existing
+2026-04-14T13:47:49.000Z,Sevda_Sevim,Sevda Aleyna Sevim,SevdaAleynaSevim@naba.it,Roots,,,existing
+2026-04-14T13:47:49.000Z,Andrian_Cerga,Andrian_Cerga,Andrian_Cerga@naba.it,SelfExe,,,existing
+2026-04-14T13:47:49.000Z,Giacomo_Grioni,Giacomo_Grioni,Giacomo_Grioni@naba.it,SelfExe,,,existing
+2026-04-14T13:47:49.000Z,Giulia_Scordino,Giulia_Scordino,Giulia_Scordino@naba.it,SelfExe,,,existing
+2026-04-14T13:47:49.000Z,Jacopo_Ansaloni,Jacopo_Ansaloni,Jacopo_Ansaloni@naba.it,SelfExe,,,existing
+2026-04-14T13:47:49.000Z,Sonia_DiGennaro,Sonia_DiGennaro,Sonia_DiGennaro@naba.it,SelfExe,,,existing
+2026-04-14T13:47:49.000Z,Alessia_DiGiannatale,Alessia_DiGiannatale,Alessia_DiGiannatale@naba.it,TrainOfThoughts,,,existing
+2026-04-14T13:47:49.000Z,Bianca_Montobbio,Bianca_Montobbio,Bianca_Montobbio@naba.it,TrainOfThoughts,,,existing
+2026-04-14T13:47:49.000Z,Martina_Tedesco,Martina_Tedesco,Martina_Tedesco@naba.it,TrainOfThoughts,,,existing
+2026-04-14T13:47:49.000Z,administrator,administator,tech@naba.it,Unassigned,,,existing
+2026-04-14T13:47:49.000Z,anna_brue,Anna Brue,anna.brue@naba.it,Unassigned,,,existing
+2026-04-14T13:47:49.000Z,rendernodes,rendernodes,rendernodes@naba.it,Unassigned,,,existing
