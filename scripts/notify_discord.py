@@ -66,7 +66,10 @@ def main():
     req = urllib.request.Request(
         webhook,
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "NABA-Perforce-Bot/1.0",
+        },
         method="POST",
     )
 
