@@ -42,3 +42,44 @@ jobs:
           git add data/users.csv data/users.xlsx
           git diff --cached --quiet || git commit -m "feat: new user registration - $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push
+
+      - name: Notify Discord
+        if: success()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          USER_DATA: ${{ github.event.inputs.user_data }}
+        run: |
+          python3 -c "
+          import json, urllib.request, os
+
+          webhook = os.environ['DISCORD_WEBHOOK']
+          raw = json.loads(os.environ['USER_DATA'])
+          users = raw if isinstance(raw, list) else [raw]
+
+          lines = []
+          for u in users:
+              lines.append(f\"• **{u['full_name']}** (\`{u['username']}\`) — {u['team']}\")
+
+          embed = {
+              'embeds': [{
+                  'title': '📋 Nuova registrazione Perforce',
+                  'description': '\n'.join(lines),
+                  'color': 2664261,
+                  'fields': [
+                      {'name': 'Utenti', 'value': str(len(users)), 'inline': True},
+                      {'name': 'Team', 'value': users[0].get('team', 'N/A'), 'inline': True},
+                      {'name': 'Tesista', 'value': users[0].get('tesista', 'no').capitalize(), 'inline': True},
+                  ],
+                  'footer': {'text': 'Perforce NABA Registration System'},
+              }]
+          }
+
+          req = urllib.request.Request(
+              webhook,
+              data=json.dumps(embed).encode(),
+              headers={'Content-Type': 'application/json'},
+              method='POST'
+          )
+          urllib.request.urlopen(req)
+          print('Discord notification sent')
+          "
