@@ -27,13 +27,9 @@ import argparse
 import csv
 import getpass
 import json
-import smtplib
-import ssl
 import sys
 import urllib.request
 import urllib.error
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from pathlib import Path
 
 
@@ -45,11 +41,9 @@ from pathlib import Path
 DISCORD_GUILD_ID = "1369620948680048710"  # Right-click server → Copy Server ID
 DISCORD_CATEGORY_NAME = "Tesi"                # Default category for new channels
 
-# SMTP — ask your IT for these values
-SMTP_SERVER = "smtp.office365.com"        # e.g. smtp.office365.com, smtp.gmail.com
-SMTP_PORT = 587                          # 587 for TLS, 465 for SSL
-SMTP_USER = "leonardo.villa@naba-da.com"           # the sender email address
-SMTP_FROM_NAME = "NABA Perforce Admin"
+# Resend (https://resend.com — free: 100 emails/day)
+# Use "onboarding@resend.dev" for testing, then add your own domain
+RESEND_FROM = "NABA Perforce <noreply@p4naba.com>"
 
 # Email template subject
 EMAIL_SUBJECT_IT = "Account Perforce creato — {team}"
@@ -71,6 +65,7 @@ def discord_request(method: str, endpoint: str, token: str, data: dict = None) -
     headers = {
         "Authorization": f"Bot {token}",
         "Content-Type": "application/json",
+        "User-Agent": "NABA-Perforce-Bot/1.0",
     }
 
     body = json.dumps(data).encode() if data else None
@@ -312,30 +307,41 @@ def send_email(
     to_email: str,
     subject: str,
     html_body: str,
-    smtp_password: str,
+    resend_api_key: str,
     dry_run: bool = False,
 ) -> bool:
-    """Send an HTML email via SMTP."""
+    """Send an HTML email via Resend API."""
     if dry_run:
         print(f"    [dry-run] Would send email to {to_email}")
         return True
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = f"{SMTP_FROM_NAME} <{SMTP_USER}>"
-    msg["To"] = to_email
-    msg.attach(MIMEText(html_body, "html"))
+    payload = json.dumps({
+        "from": RESEND_FROM,
+        "to": [to_email],
+        "subject": subject,
+        "html": html_body,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {resend_api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "NABA-Perforce-Bot/1.0",
+        },
+        method="POST",
+    )
 
     try:
-        context = ssl.create_default_context()
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.ehlo()
-            server.starttls(context=context)
-            server.ehlo()
-            server.login(SMTP_USER, smtp_password)
-            server.sendmail(SMTP_USER, to_email, msg.as_string())
-        print(f"    [sent] Email to {to_email}")
-        return True
+        with urllib.request.urlopen(req) as resp:
+            result = json.loads(resp.read().decode())
+            print(f"    [sent] Email to {to_email} (id: {result.get('id', 'ok')})")
+            return True
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode()
+        print(f"    [ERROR] Failed to send email to {to_email}: {e.code} {error_body}")
+        return False
     except Exception as e:
         print(f"    [ERROR] Failed to send email to {to_email}: {e}")
         return False
@@ -351,7 +357,7 @@ def read_csv(path: Path) -> list[dict]:
 def provision_discord_and_email(
     users: list[dict],
     discord_token: str = None,
-    smtp_password: str = None,
+    resend_api_key: str = None,
     category_name: str = DISCORD_CATEGORY_NAME,
     dry_run: bool = False,
 ):
@@ -420,13 +426,13 @@ def provision_discord_and_email(
         print("    [skip] No Discord token — skipping Discord setup")
 
     # ── Emails ──
-    if smtp_password:
+    if resend_api_key:
         for user in users:
             subject = EMAIL_SUBJECT_IT.format(team=team)
             html = build_email_html(user, team, invite_url or "https://discord.gg/your-server")
-            send_email(user["email"].strip(), subject, html, smtp_password, dry_run)
+            send_email(user["email"].strip(), subject, html, resend_api_key, dry_run)
     else:
-        print("    [skip] No SMTP password — skipping emails")
+        print("    [skip] No Resend API key — skipping emails")
 
     return invite_url
 
@@ -460,7 +466,7 @@ Examples:
 
     # Interactive credential prompts
     discord_token = None
-    smtp_password = None
+    resend_api_key = None
 
     if not args.skip_discord:
         discord_token = getpass.getpass("Discord bot token: ")
@@ -469,10 +475,10 @@ Examples:
             discord_token = None
 
     if not args.skip_email:
-        smtp_password = getpass.getpass(f"SMTP password for {SMTP_USER}: ")
-        if not smtp_password.strip():
-            print("No password entered — skipping emails.")
-            smtp_password = None
+        resend_api_key = getpass.getpass("Resend API key: ")
+        if not resend_api_key.strip():
+            print("No key entered — skipping emails.")
+            resend_api_key = None
 
     # Read CSV and group by team
     rows = read_csv(args.csv)
@@ -497,7 +503,7 @@ Examples:
         provision_discord_and_email(
             users=users,
             discord_token=discord_token,
-            smtp_password=smtp_password,
+            resend_api_key=resend_api_key,
             category_name=args.category,
             dry_run=args.dry_run,
         )
