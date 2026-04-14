@@ -201,38 +201,52 @@ def main():
         groups_found.update(groups)
     print(f"  Found {len(groups_found)} groups\n")
 
-    # Build CSV rows
+    # Build CSV rows — one row per user-group combination
+    # If a user belongs to multiple groups, they get multiple rows
     now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")
     rows = []
+    multi_group_users = []
 
     for user in users:
         username = user["username"]
         groups = user_groups.get(username, [])
-        # Use first group as team, or "Unassigned" if no group
-        team = groups[0] if groups else "Unassigned"
 
-        rows.append({
-            "timestamp": now,
-            "username": username,
-            "full_name": user["full_name"] or username,
-            "email": user["email"] or f"{username}@studenti.naba.it",
-            "team": team,
-            "tesista": "",
-            "anno_corso": "",
-            "status": "existing",
-        })
+        if not groups:
+            groups = ["Unassigned"]
+
+        if len(groups) > 1:
+            multi_group_users.append((username, groups))
+
+        for group in groups:
+            rows.append({
+                "timestamp": now,
+                "username": username,
+                "full_name": user["full_name"] or username,
+                "email": user["email"] or f"{username}@studenti.naba.it",
+                "team": group,
+                "tesista": "",
+                "anno_corso": "",
+                "status": "existing",
+            })
 
     # Sort by team then name
     rows.sort(key=lambda r: (r["team"].lower(), r["full_name"].lower()))
 
     # Preview
-    print(f"{'─' * 60}")
-    print(f"{'Username':<25} {'Team':<20} {'Email'}")
-    print(f"{'─' * 60}")
+    print(f"{'─' * 70}")
+    print(f"{'Username':<25} {'Team':<25} {'Email'}")
+    print(f"{'─' * 70}")
     for r in rows:
-        print(f"{r['username']:<25} {r['team']:<20} {r['email']}")
-    print(f"{'─' * 60}")
-    print(f"Total: {len(rows)} users\n")
+        print(f"{r['username']:<25} {r['team']:<25} {r['email']}")
+    print(f"{'─' * 70}")
+    print(f"Total: {len(rows)} rows ({len(users)} unique users)\n")
+
+    # Show multi-group users
+    if multi_group_users:
+        print(f"Users in multiple teams ({len(multi_group_users)}):")
+        for username, groups in multi_group_users:
+            print(f"  {username} → {', '.join(groups)}")
+        print()
 
     # Group summary
     teams = {}
@@ -250,16 +264,21 @@ def main():
 
     # Merge or overwrite
     if args.merge:
-        existing_usernames = read_existing_csv(args.output)
         existing_rows = read_existing_rows(args.output)
+        # Deduplicate by username+team pair (not just username, since users can be in multiple teams)
+        existing_pairs = {
+            (r["username"].strip().lower(), r.get("team", "").strip().lower())
+            for r in existing_rows
+        }
         new_count = 0
         for r in rows:
-            if r["username"].strip().lower() not in existing_usernames:
+            pair = (r["username"].strip().lower(), r["team"].strip().lower())
+            if pair not in existing_pairs:
                 existing_rows.append(r)
                 new_count += 1
         existing_rows.sort(key=lambda r: (r.get("team", "").lower(), r.get("full_name", "").lower()))
         final_rows = existing_rows
-        print(f"Merging: {new_count} new users added, {len(existing_usernames)} already in CSV")
+        print(f"Merging: {new_count} new rows added, {len(existing_pairs)} already in CSV")
     else:
         final_rows = rows
 
