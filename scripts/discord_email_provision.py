@@ -38,12 +38,11 @@ from pathlib import Path
 # ══════════════════════════════════════════════════════════════
 
 # Discord
-DISCORD_GUILD_ID = "1369620948680048710"  # Right-click server → Copy Server ID
-DISCORD_CATEGORY_NAME = "Tesi"                # Default category for new channels
+DISCORD_GUILD_ID = "1369620948680048710"
+DISCORD_CATEGORY_NAME = "Tesi"
 
 # Resend (https://resend.com — free: 100 emails/day)
-# Use "onboarding@resend.dev" for testing, then add your own domain
-RESEND_FROM = "NABA Perforce <noreply@p4naba.com>"
+RESEND_FROM = "NABA Perforce <info@p4naba.com>"
 
 # Email template subject
 EMAIL_SUBJECT_IT = "Account Perforce creato — {team}"
@@ -146,10 +145,9 @@ def create_role(token: str, team_name: str, dry_run: bool = False) -> dict | Non
     return role
 
 
-def create_channel(token: str, team_name: str, role_id: str, category_id: str = None, dry_run: bool = False) -> dict | None:
-    """Create a private text channel visible only to the team role."""
-    # Channel names in Discord are lowercase, no spaces
-    channel_name = team_name.lower().replace(" ", "-")
+def create_channel(token: str, team_name: str, role_id: str, category_id: str = None, bot_id: str = None, dry_run: bool = False) -> dict | None:
+    """Create a private text channel visible only to the team role and the bot."""
+    channel_name = team_name.lower().replace(" ", "-").replace("_", "-")
 
     existing = find_channel_by_name(token, channel_name, category_id)
     if existing:
@@ -160,60 +158,80 @@ def create_channel(token: str, team_name: str, role_id: str, category_id: str = 
         print(f"    [dry-run] Would create Discord channel '#{channel_name}'")
         return {"id": "dry-run", "name": channel_name}
 
-    # Get @everyone role id (same as guild id)
     everyone_role_id = DISCORD_GUILD_ID
 
     # Permission overwrites:
-    # - @everyone: deny VIEW_CHANNEL (0x400)
-    # - team role: allow VIEW_CHANNEL + SEND_MESSAGES + READ_MESSAGE_HISTORY
+    # - @everyone: deny VIEW_CHANNEL
+    # - team role: allow VIEW + SEND + READ_HISTORY
+    # - bot: allow VIEW + SEND + MANAGE_CHANNELS + MANAGE_ROLES (so it can create invites)
     permission_overwrites = [
         {
             "id": everyone_role_id,
-            "type": 0,  # role
-            "deny": "1024",  # VIEW_CHANNEL
+            "type": 0,
+            "deny": "1024",
             "allow": "0",
         },
         {
             "id": role_id,
-            "type": 0,  # role
-            "allow": "68608",  # VIEW_CHANNEL (1024) + SEND_MESSAGES (2048) + READ_MESSAGE_HISTORY (65536)
+            "type": 0,
+            "allow": "68608",
             "deny": "0",
         },
     ]
 
+    # Add bot user to overwrites so it can see and manage the channel
+    if bot_id:
+        permission_overwrites.append({
+            "id": bot_id,
+            "type": 1,  # type 1 = member (not role)
+            "allow": "268504080",  # VIEW + SEND + MANAGE_CHANNELS + MANAGE_ROLES + CREATE_INVITE
+            "deny": "0",
+        })
+
     payload = {
         "name": channel_name,
-        "type": 0,  # text channel
+        "type": 0,
         "permission_overwrites": permission_overwrites,
+        "topic": f"Canale dedicato al team {team_name} — Depot: //{team_name}/...",
     }
 
     if category_id:
         payload["parent_id"] = category_id
 
+    print(f"    Creating channel '#{channel_name}'...")
     channel = discord_request("POST", f"/guilds/{DISCORD_GUILD_ID}/channels", token, payload)
 
-    if channel:
-        print(f"    [created] Discord channel '#{channel_name}'")
+    if channel and "id" in channel:
+        print(f"    [created] Discord channel '#{channel_name}' (id: {channel['id']})")
+    else:
+        print(f"    [ERROR] Channel creation failed — response: {channel}")
     return channel
 
 
+def get_bot_user(token: str) -> dict | None:
+    """Get the bot's own user info (to get its ID)."""
+    return discord_request("GET", "/users/@me", token)
+
+
 def create_invite(token: str, channel_id: str, dry_run: bool = False) -> str | None:
-    """Create a permanent invite link for a channel."""
+    """Create a permanent invite link for a specific channel."""
     if dry_run:
         print(f"    [dry-run] Would create invite for channel")
         return "https://discord.gg/dry-run-invite"
 
     invite = discord_request("POST", f"/channels/{channel_id}/invites", token, {
-        "max_age": 0,       # never expires
-        "max_uses": 0,      # unlimited uses
-        "unique": False,    # reuse existing if possible
+        "max_age": 0,
+        "max_uses": 0,
+        "unique": False,
+        "target_type": None,
     })
 
     if invite and "code" in invite:
         url = f"https://discord.gg/{invite['code']}"
-        print(f"    [invite] {url}")
+        print(f"    [invite] {url} (channel-specific)")
         return url
-
+    else:
+        print(f"    [ERROR] Invite creation failed — response: {invite}")
     return None
 
 
@@ -378,11 +396,18 @@ def provision_discord_and_email(
 
     # ── Discord ──
     if discord_token:
+        # Get bot's own user ID first
+        bot_user = get_bot_user(discord_token)
+        bot_id = bot_user["id"] if bot_user else None
+        if bot_id:
+            print(f"    Bot connected (id: {bot_id})")
+        else:
+            print(f"    [WARNING] Could not get bot info — channel permissions may be limited")
+
         # Find category
         category_id = find_category_id(discord_token, category_name)
         if not category_id and not dry_run:
-            print(f"    [WARNING] Category '{category_name}' not found. Channel will be created without a category.")
-            print(f"    Available categories will be listed for you to choose.")
+            print(f"    [WARNING] Category '{category_name}' not found.")
             channels = get_guild_channels(discord_token)
             categories = [ch for ch in channels if ch.get("type") == 4]
             if categories:
@@ -401,11 +426,18 @@ def provision_discord_and_email(
         else:
             role_id = role["id"]
 
-            # Create channel
-            channel = create_channel(discord_token, team, role_id, category_id, dry_run)
+            # Create channel (with bot permissions)
+            channel = create_channel(discord_token, team, role_id, category_id, bot_id, dry_run)
 
-            if channel:
+            # If failed and we had a category, retry without it
+            if not channel and category_id:
+                print(f"    [RETRY] Trying without category (you can drag it into '{category_name}' later)...")
+                channel = create_channel(discord_token, team, role_id, None, bot_id, dry_run)
+
+            if channel and "id" in channel:
                 channel_id = channel["id"]
+
+                # Create invite specifically for this channel
                 invite_url = create_invite(discord_token, channel_id, dry_run)
 
                 # Send a welcome message in the channel
@@ -422,6 +454,9 @@ def provision_discord_and_email(
                     discord_request("POST", f"/channels/{channel_id}/messages", discord_token, {
                         "content": welcome_msg
                     })
+                    print(f"    [message] Welcome message sent to #{team.lower()}")
+            else:
+                print(f"    [ERROR] Channel not created — skipping invite")
     else:
         print("    [skip] No Discord token — skipping Discord setup")
 
