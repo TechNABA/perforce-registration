@@ -32,7 +32,7 @@ from pathlib import Path
 # ══════════════════════════════════════════════════════════════
 # CONFIGURATION — edit these to match your setup
 # ══════════════════════════════════════════════════════════════
-P4PORT = "perforce.naba.it:1666"
+P4PORT = "10.150.3.1:1666"
 P4USER = "villal"
 P4PASSWD = ""  # set at runtime via interactive prompt
 # ══════════════════════════════════════════════════════════════
