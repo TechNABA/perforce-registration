@@ -43,7 +43,7 @@ timestamp,username,full_name,email,team,tesista,anno_corso,status
 2026-04-14T14:03:18.000Z,Gianluca_Lucchini,Gianluca_Lucchini,Gianluca_Lucchini@naba.it,MidnightRunners,,,existing
 2026-04-14T14:03:18.000Z,Tommaso_Mancini,Tommaso_Mancini,Tommaso_Mancini@naba.it,MidnightRunners,,,existing
 2026-04-14T14:03:18.000Z,Valeria_Portillo,Valeria_Portillo,Valeria_Portillo@naba.it,MidnightRunners,,,existing
-2026-04-22T13:47:12.595Z,umberto_punzi,Umberto Punzi,umberto.punzi@gmail.com,Omega,yes,,pending
+2026-04-22T13:47:12.595Z,umberto_punzi,Umberto Punzi,umberto.punzi@gmail.com,Omega,yes,,created
 2026-04-14T14:03:18.000Z,gabriele_dallari,gabriele_dallari,gabriele_dallari@VS_MAIN,Overload,,,existing
 2026-04-14T14:03:18.000Z,lorenzo_fiorentino,lorenzo_fiorentino,lorenzo_fiorentino@VS_MAIN,Overload,,,existing
 2026-04-14T14:03:18.000Z,luigi_cirelli,luigi_cirelli,luigi_cirelli@VS_MAIN,Overload,,,existing
@@ -57,8 +57,8 @@ timestamp,username,full_name,email,team,tesista,anno_corso,status
 2026-04-14T14:03:18.000Z,isabella_bari,isabella_bari,isabella_bari@VS_MAIN,Reality,,,existing
 2026-04-14T14:03:18.000Z,maria_villarroel,maria_villarroel,maria_villarroel@VS_MAIN,Reality,,,existing
 2026-04-14T14:03:18.000Z,victor_fernandes,victor_fernandes,victor_fernandes@VS_MAIN,Reality,,,existing
-2026-04-23T15:31:10.477Z,gaia_colciago,Gaia Colciago,gaia_colciago@studenti.naba.it,Residual,yes,,duplicate
-2026-04-23T15:31:10.477Z,lorenzo_mari,Lorenzo Mari,lorenzo_mari@studenti.naba.it,Residual,yes,,duplicate
+2026-04-23T15:31:10.477Z,gaia_colciago,Gaia Colciago,gaia_colciago@studenti.naba.it,Residual,yes,,created
+2026-04-23T15:31:10.477Z,lorenzo_mari,Lorenzo Mari,lorenzo_mari@studenti.naba.it,Residual,yes,,created
 2026-04-14T14:03:18.000Z,Alessandro_Caime,Alessandro_Caime,Alessandro_Caime@naba.it,RitmoNulla,,,existing
 2026-04-14T14:03:18.000Z,Feng_Yuchen,Feng_Yuchen,Feng_Yuchen@naba.it,RitmoNulla,,,existing
 2026-04-14T14:03:18.000Z,Filippo_Damiano,Filippo_Damiano,Filippo_Damiano@naba.it,RitmoNulla,,,existing
