@@ -13,6 +13,9 @@ ADMIN_TOKEN*
 # Documenti interni di lavoro — non vanno nella repo pubblica
 HANDOFF.md
 
+# Node (serve solo per lanciare i test del worker)
+node_modules/
+
 # Python
 __pycache__/
 *.py[cod]
