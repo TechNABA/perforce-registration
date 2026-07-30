@@ -1,0 +1,27 @@
+# Dati personali — non devono MAI tornare nella repo pubblica.
+# Vivono nel KV Cloudflare, non su GitHub.
+data/
+*.csv
+*.xlsx
+
+# Segreti
+.dev.vars
+.env
+*.token
+ADMIN_TOKEN*
+
+# Documenti interni di lavoro — non vanno nella repo pubblica
+HANDOFF.md
+
+# Node (serve solo per i test del worker)
+node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Sistema
+.DS_Store
+Thumbs.db

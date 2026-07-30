@@ -2,84 +2,49 @@
 """
 perforce_provision.py
 
-Reads users.csv and for each user with status 'pending':
-  1. Creates the Perforce user
-  2. Creates the group (named after the team) if it doesn't exist
-  3. Adds the user to the group
-  4. Creates a local depot (named after the team) if it doesn't exist
-  5. Adds write protection for the group on the depot
-  6. Updates the user's status to 'created' in the CSV
+Scarica gli utenti dal Worker Cloudflare e, per ognuno con status 'pending':
+  1. Crea l'utente Perforce
+  2. Crea il gruppo (col nome del team) se non esiste
+  3. Aggiunge l'utente al gruppo
+  4. Crea un depot locale (col nome del team) se non esiste
+  5. Aggiunge la protezione write per il gruppo sul depot
+  6. Aggiorna lo status a 'created' sul Worker
 
-The script will ask for your Perforce admin password interactively
-(hidden input, not stored anywhere).
+Password Perforce e token admin vengono chiesti a runtime (input nascosto,
+non salvati da nessuna parte).
 
-Usage:
-    python perforce_provision.py                        # auto-finds users.csv
-    python perforce_provision.py --csv path/to/file     # custom CSV path
-    python perforce_provision.py --dry-run               # preview without changes
-    python perforce_provision.py --password changeme     # initial password for new users
+Uso:
+    python perforce_provision.py                            # provisioning
+    python perforce_provision.py --dry-run                  # anteprima
+    python perforce_provision.py --password changeme        # password iniziale
+    python perforce_provision.py --export-xlsx utenti.xlsx  # XLSX in locale
 """
 
 import argparse
-import csv
 import getpass
 import os
 import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import naba_store
+from naba_store import StoreError
+
 
 # ══════════════════════════════════════════════════════════════
-# CONFIGURATION — edit these to match your setup
+# CONFIGURAZIONE
 # ══════════════════════════════════════════════════════════════
-P4PORT = "10.150.3.1:1666"
+P4PORT = "perforce.naba.it:1666"
 P4USER = "villal"
-P4PASSWD = ""  # set at runtime via interactive prompt
+P4PASSWD = ""  # impostata a runtime dal prompt
 # ══════════════════════════════════════════════════════════════
 
 
-FIELDS = [
-    "timestamp", "username", "full_name", "email",
-    "team", "tesista", "anno_corso", "status",
-]
-
-
-def find_csv(custom_path: Path = None) -> Path:
-    """Find the users.csv file, trying multiple common locations."""
-    if custom_path:
-        if custom_path.exists():
-            return custom_path
-        print(f"ERROR: Specified CSV not found: {custom_path}")
-        sys.exit(1)
-
-    # Try common paths relative to CWD and script location
-    script_dir = Path(__file__).resolve().parent
-    repo_root = script_dir.parent
-
-    candidates = [
-        Path("data/users.csv"),                    # CWD is repo root
-        Path("users.csv"),                         # CWD is data/
-        repo_root / "data" / "users.csv",          # relative to script
-        script_dir / "data" / "users.csv",         # data/ next to script
-        Path.home() / "Downloads" / "users.csv",   # downloaded from GitHub
-    ]
-
-    for p in candidates:
-        if p.exists():
-            return p
-
-    print("ERROR: Cannot find users.csv")
-    print("Tried:")
-    for p in candidates:
-        print(f"  {p}")
-    print("\nUse --csv to specify the path manually:")
-    print("  python perforce_provision.py --csv /path/to/users.csv")
-    sys.exit(1)
-
-
-# ── p4 helpers ──────────────────────────────────────────────────
+# ── helper p4 ───────────────────────────────────────────────────
 def get_p4_env() -> dict:
-    """Build environment dict with Perforce settings."""
+    """Environment con le impostazioni Perforce."""
     env = os.environ.copy()
     env["P4PORT"] = P4PORT
     env["P4USER"] = P4USER
@@ -89,10 +54,9 @@ def get_p4_env() -> dict:
 
 
 def p4(cmd: str, stdin_text: str = None) -> subprocess.CompletedProcess:
-    """Run a p4 command with configured server/user/password."""
-    full_cmd = f"p4 {cmd}"
+    """Esegue un comando p4 con server/utente/password configurati."""
     return subprocess.run(
-        full_cmd,
+        f"p4 {cmd}",
         shell=True,
         capture_output=True,
         text=True,
@@ -102,18 +66,15 @@ def p4(cmd: str, stdin_text: str = None) -> subprocess.CompletedProcess:
 
 
 def p4_user_exists(username: str) -> bool:
-    result = p4(f"users {username}")
-    return username in result.stdout
+    return username in p4(f"users {username}").stdout
 
 
 def p4_group_exists(group_name: str) -> bool:
-    result = p4("groups")
-    return group_name in result.stdout.split()
+    return group_name in p4("groups").stdout.split()
 
 
 def p4_depot_exists(depot_name: str) -> bool:
-    result = p4("depots")
-    for line in result.stdout.strip().split("\n"):
+    for line in p4("depots").stdout.strip().split("\n"):
         if line.startswith(f"Depot {depot_name} "):
             return True
     return False
@@ -121,7 +82,7 @@ def p4_depot_exists(depot_name: str) -> bool:
 
 def create_user(username: str, full_name: str, email: str, password: str = None, dry_run: bool = False) -> bool:
     if p4_user_exists(username):
-        print(f"    [skip] User '{username}' already exists")
+        print(f"    [skip] Utente '{username}' già esistente")
         return True
 
     spec = (
@@ -131,29 +92,29 @@ def create_user(username: str, full_name: str, email: str, password: str = None,
     )
 
     if dry_run:
-        print(f"    [dry-run] Would create user '{username}' ({full_name}, {email})")
+        print(f"    [dry-run] Creerebbe l'utente '{username}'")
         return True
 
     result = p4("user -f -i", stdin_text=spec)
     if result.returncode != 0:
-        print(f"    [ERROR] Failed to create user '{username}': {result.stderr.strip()}")
+        print(f"    [ERRORE] Creazione utente '{username}' fallita: {result.stderr.strip()}")
         return False
 
-    print(f"    [created] User '{username}'")
+    print(f"    [creato] Utente '{username}'")
 
     if password:
         result = p4(f"-u {username} passwd", stdin_text=f"{password}\n{password}\n")
         if result.returncode == 0:
-            print(f"    [password] Set for '{username}'")
+            print(f"    [password] Impostata per '{username}'")
         else:
-            print(f"    [WARNING] Could not set password for '{username}': {result.stderr.strip()}")
+            print(f"    [ATTENZIONE] Password non impostata per '{username}': {result.stderr.strip()}")
 
     return True
 
 
 def create_group(group_name: str, dry_run: bool = False) -> bool:
     if p4_group_exists(group_name):
-        print(f"    [skip] Group '{group_name}' already exists")
+        print(f"    [skip] Gruppo '{group_name}' già esistente")
         return True
 
     spec = (
@@ -166,22 +127,22 @@ def create_group(group_name: str, dry_run: bool = False) -> bool:
     )
 
     if dry_run:
-        print(f"    [dry-run] Would create group '{group_name}'")
+        print(f"    [dry-run] Creerebbe il gruppo '{group_name}'")
         return True
 
     result = p4("group -i", stdin_text=spec)
     if result.returncode != 0:
-        print(f"    [ERROR] Failed to create group '{group_name}': {result.stderr.strip()}")
+        print(f"    [ERRORE] Creazione gruppo '{group_name}' fallita: {result.stderr.strip()}")
         return False
 
-    print(f"    [created] Group '{group_name}'")
+    print(f"    [creato] Gruppo '{group_name}'")
     return True
 
 
 def add_user_to_group(username: str, group_name: str, dry_run: bool = False) -> bool:
     result = p4(f"group -o {group_name}")
     if result.returncode != 0:
-        print(f"    [ERROR] Cannot read group '{group_name}': {result.stderr.strip()}")
+        print(f"    [ERRORE] Gruppo '{group_name}' non leggibile: {result.stderr.strip()}")
         return False
 
     spec_lines = result.stdout.strip().split("\n")
@@ -201,7 +162,7 @@ def add_user_to_group(username: str, group_name: str, dry_run: bool = False) -> 
                 break
 
     if user_already_added:
-        print(f"    [skip] User '{username}' already in group '{group_name}'")
+        print(f"    [skip] Utente '{username}' già nel gruppo '{group_name}'")
         return True
 
     new_spec_lines = []
@@ -219,21 +180,21 @@ def add_user_to_group(username: str, group_name: str, dry_run: bool = False) -> 
     new_spec = "\n".join(new_spec_lines) + "\n"
 
     if dry_run:
-        print(f"    [dry-run] Would add '{username}' to group '{group_name}'")
+        print(f"    [dry-run] Aggiungerebbe '{username}' al gruppo '{group_name}'")
         return True
 
     result = p4("group -i", stdin_text=new_spec)
     if result.returncode != 0:
-        print(f"    [ERROR] Failed to add '{username}' to group '{group_name}': {result.stderr.strip()}")
+        print(f"    [ERRORE] '{username}' non aggiunto al gruppo '{group_name}': {result.stderr.strip()}")
         return False
 
-    print(f"    [added] User '{username}' → group '{group_name}'")
+    print(f"    [aggiunto] '{username}' → gruppo '{group_name}'")
     return True
 
 
 def create_depot(depot_name: str, dry_run: bool = False) -> bool:
     if p4_depot_exists(depot_name):
-        print(f"    [skip] Depot '{depot_name}' already exists")
+        print(f"    [skip] Depot '{depot_name}' già esistente")
         return True
 
     spec = (
@@ -243,124 +204,136 @@ def create_depot(depot_name: str, dry_run: bool = False) -> bool:
     )
 
     if dry_run:
-        print(f"    [dry-run] Would create depot '{depot_name}'")
+        print(f"    [dry-run] Creerebbe il depot '{depot_name}'")
         return True
 
     result = p4("depot -i", stdin_text=spec)
     if result.returncode != 0:
-        print(f"    [ERROR] Failed to create depot '{depot_name}': {result.stderr.strip()}")
+        print(f"    [ERRORE] Creazione depot '{depot_name}' fallita: {result.stderr.strip()}")
         return False
 
-    print(f"    [created] Depot '//{depot_name}/...'")
+    print(f"    [creato] Depot '//{depot_name}/...'")
     return True
 
 
 def add_protection(group_name: str, depot_name: str, dry_run: bool = False) -> bool:
     result = p4("protect -o")
     if result.returncode != 0:
-        print(f"    [ERROR] Cannot read protections: {result.stderr.strip()}")
+        print(f"    [ERRORE] Protezioni non leggibili: {result.stderr.strip()}")
         return False
 
     protect_spec = result.stdout
     prot_line = f"\twrite group {group_name} * //{depot_name}/..."
 
     if prot_line.strip() in protect_spec:
-        print(f"    [skip] Protection already exists for group '{group_name}' on '//{depot_name}/...'")
+        print(f"    [skip] Protezione già presente per '{group_name}' su '//{depot_name}/...'")
         return True
 
     if dry_run:
-        print(f"    [dry-run] Would add write protection: group '{group_name}' → '//{depot_name}/...'")
+        print(f"    [dry-run] Aggiungerebbe write: gruppo '{group_name}' → '//{depot_name}/...'")
         return True
 
     new_spec = protect_spec.rstrip() + "\n" + prot_line + "\n"
 
     result = p4("protect -i", stdin_text=new_spec)
     if result.returncode != 0:
-        print(f"    [ERROR] Failed to update protections: {result.stderr.strip()}")
+        print(f"    [ERRORE] Aggiornamento protezioni fallito: {result.stderr.strip()}")
         return False
 
     print(f"    [protect] write group:{group_name} → //{depot_name}/...")
     return True
 
 
-# ── CSV ─────────────────────────────────────────────────────────
-def read_csv(path: Path) -> list[dict]:
-    with open(path, "r", newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+def export_xlsx(rows: list[dict], path: Path) -> None:
+    """Scrive l'XLSX in locale. Il file contiene dati personali."""
+    try:
+        from xlsx_export import write_xlsx
+    except ImportError as e:
+        print(f"\n[ATTENZIONE] Export XLSX non disponibile: {e}")
+        print("Serve openpyxl: pip install -r requirements.txt")
+        return
 
-
-def write_csv(path: Path, rows: list[dict]):
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDS)
-        writer.writeheader()
-        writer.writerows(rows)
+    write_xlsx(rows, path)
+    print(f"\nXLSX scritto: {path} ({len(rows)} utenti)")
+    print("Contiene dati personali: non committarlo.")
 
 
 # ── Main ────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(
-        description="Provision Perforce users from CSV",
+        description="Provisioning utenti Perforce dai dati sul Worker Cloudflare",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
+Esempi:
   python perforce_provision.py --dry-run
   python perforce_provision.py
-  python perforce_provision.py --password Welcome2025!
-  python perforce_provision.py --csv ~/Downloads/users.csv
+  python perforce_provision.py --password Welcome2026!
+  python perforce_provision.py --export-xlsx ~/Desktop/utenti.xlsx
         """,
     )
-    parser.add_argument("--csv", type=Path, default=None, help="Path to users.csv (auto-detected if omitted)")
-    parser.add_argument("--dry-run", action="store_true", help="Preview actions without making changes")
-    parser.add_argument("--password", type=str, default=None, help="Initial password for new Perforce users")
-    parser.add_argument("--skip-discord", action="store_true", help="Skip Discord channel/role creation")
-    parser.add_argument("--skip-email", action="store_true", help="Skip sending welcome emails")
-    parser.add_argument("--category", type=str, default="Tesi", help="Discord category for new channels (default: Tesi)")
+    parser.add_argument("--dry-run", action="store_true", help="Anteprima senza modifiche")
+    parser.add_argument("--password", type=str, default=None,
+                        help="Password iniziale per i nuovi utenti Perforce")
+    parser.add_argument("--skip-discord", action="store_true", help="Salta creazione ruoli/canali Discord")
+    parser.add_argument("--skip-email", action="store_true", help="Salta invio email di benvenuto")
+    parser.add_argument("--category", type=str, default="Tesi",
+                        help="Categoria Discord per i nuovi canali (default: Tesi)")
+    parser.add_argument("--export-xlsx", type=Path, default=None,
+                        help="Genera l'XLSX degli utenti in locale a fine esecuzione")
     args = parser.parse_args()
 
-    # Ask for admin password interactively (hidden input)
-    global P4PASSWD
-    print(f"Server: {P4PORT}")
-    print(f"User:   {P4USER}")
-    P4PASSWD = getpass.getpass(f"Password for {P4USER}: ")
+    # ── Dati dal Worker ──
+    print(f"Worker: {naba_store.worker_url()}")
+    admin_token = naba_store.get_admin_token()
 
-    # Find CSV
-    csv_path = find_csv(args.csv)
-    print(f"Using CSV: {csv_path}")
-
-    # Verify p4 connection
-    print(f"Connecting to {P4PORT} as {P4USER}...")
-    result = p4("info")
-    if result.returncode != 0:
-        print(f"ERROR: Cannot connect to Perforce server.")
-        print(f"  Server: {P4PORT}")
-        print(f"  User:   {P4USER}")
-        print(f"  Error:  {result.stderr.strip()}")
-        print()
-        print("Make sure:")
-        print("  1. p4 CLI is installed and in your PATH")
-        print("  2. The server is reachable from your network")
-        print("  3. P4PASSWD is set correctly")
+    try:
+        rows = naba_store.fetch_users(admin_token)
+    except StoreError as e:
+        print(f"ERRORE: {e}")
         sys.exit(1)
 
-    print(f"Connected to Perforce server")
+    print(f"Scaricati {len(rows)} record dal KV")
+
+    # ── Password Perforce ──
+    global P4PASSWD
+    print(f"\nServer: {P4PORT}")
+    print(f"Utente: {P4USER}")
+    P4PASSWD = getpass.getpass(f"Password per {P4USER}: ")
+
+    print(f"Connessione a {P4PORT}...")
+    result = p4("info")
+    if result.returncode != 0:
+        print("ERRORE: connessione al server Perforce fallita.")
+        print(f"  Server: {P4PORT}")
+        print(f"  Utente: {P4USER}")
+        print(f"  Errore: {result.stderr.strip()}")
+        print()
+        print("Verifica che:")
+        print("  1. il client p4 sia installato e nel PATH")
+        print("  2. il server sia raggiungibile dalla rete")
+        print("  3. la password sia corretta")
+        sys.exit(1)
+
+    print("Connesso al server Perforce")
     for line in result.stdout.split("\n"):
         if any(k in line for k in ["Server address", "User name", "Server version"]):
             print(f"  {line.strip()}")
 
     if args.dry_run:
-        print("\n*** DRY RUN — no changes will be made ***\n")
+        print("\n*** DRY RUN — nessuna modifica verrà applicata ***\n")
 
-    # Read CSV
-    rows = read_csv(csv_path)
     pending = [r for r in rows if r.get("status", "").strip().lower() == "pending"]
 
     if not pending:
-        print("\nNo pending users to provision. All done!")
+        print("\nNessun utente pending da processare.")
+        if args.export_xlsx:
+            export_xlsx(rows, args.export_xlsx)
         return
 
-    print(f"\nFound {len(pending)} pending user(s) to provision:\n")
+    print(f"\n{len(pending)} utente/i da processare:\n")
 
     teams_processed = set()
+    status_updates = []
     success_count = 0
     error_count = 0
 
@@ -371,16 +344,17 @@ Examples:
         team = user["team"].strip()
 
         print(f"{'─' * 50}")
-        print(f"Processing: {username} ({full_name})")
-        print(f"  Team: {team} | Tesista: {user.get('tesista', 'no')} | Anno: {user.get('anno_corso', '—') or '—'}")
+        # Nome completo ed email non vanno a schermo: restano solo nel record.
+        print(f"Elaborazione: {username}")
+        print(f"  Team: {team} | Tesista: {user.get('tesista', 'no')} | Anno: {user.get('anno_corso', '') or '—'}")
 
         all_ok = True
 
-        # 1. Create user
+        # 1. Utente
         if not create_user(username, full_name, email, args.password, args.dry_run):
             all_ok = False
 
-        # 2. Create group + depot + protection (once per team)
+        # 2. Gruppo + depot + protezione (una volta per team)
         if team not in teams_processed:
             if not create_group(team, args.dry_run):
                 all_ok = False
@@ -390,104 +364,107 @@ Examples:
                 all_ok = False
             teams_processed.add(team)
 
-        # 3. Add user to group
+        # 3. Utente nel gruppo
         if not add_user_to_group(username, team, args.dry_run):
             all_ok = False
 
-        # 4. Update status
-        if all_ok and not args.dry_run:
-            user["status"] = "created"
-            success_count += 1
-        elif not all_ok:
-            user["status"] = "error"
-            error_count += 1
-        else:
-            success_count += 1
+        # 4. Nuovo status
+        new_status = "created" if all_ok else "error"
+        user["status"] = new_status
+        status_updates.append({"username": username, "team": team, "status": new_status})
 
-    # Write updated CSV
-    if not args.dry_run:
-        write_csv(csv_path, rows)
+        if all_ok:
+            success_count += 1
+        else:
+            error_count += 1
+
+    # ── Aggiornamento status sul Worker ──
+    if not args.dry_run and status_updates:
         print(f"\n{'═' * 50}")
-        print(f"CSV updated: {csv_path}")
+        print(f"Aggiornamento status sul Worker ({len(status_updates)} record)...")
+        try:
+            result = naba_store.patch_status(admin_token, status_updates)
+            print(f"  {result['updated']} record aggiornati")
+            for f in result["failed"]:
+                print(f"  ! {f.get('username', '?')}: {f.get('error', 'errore sconosciuto')}")
+        except StoreError as e:
+            print(f"  [ERRORE] Status non aggiornati: {e}")
+            print("  Gli oggetti Perforce sono stati creati comunque.")
+            print("  Controlla lo stato con: python scripts/kv_status.py")
 
     print(f"\n{'═' * 50}")
-    print(f"PERFORCE: {success_count} succeeded, {error_count} errors")
+    print(f"PERFORCE: {success_count} riusciti, {error_count} errori")
 
     if args.dry_run:
-        print("\n*** This was a dry run. Run again without --dry-run to apply. ***")
+        print("\n*** Era un dry run. Rilancia senza --dry-run per applicare. ***")
 
-    # ── Discord + Email integration ──
-    # Always offer Discord/Email setup after Perforce provisioning
+    # ── Discord + Email ──
     if success_count == 0 and not args.dry_run:
-        print("\nNo users were provisioned — skipping Discord/Email.")
+        print("\nNessun utente creato — Discord/Email saltati.")
+        if args.export_xlsx:
+            export_xlsx(rows, args.export_xlsx)
         return
-
-    # Import the module (same directory as this script)
-    script_dir = str(Path(__file__).resolve().parent)
-    if script_dir not in sys.path:
-        sys.path.insert(0, script_dir)
 
     try:
         from discord_email_provision import provision_discord_and_email
     except ImportError as e:
-        print(f"\n[WARNING] Cannot import discord_email_provision: {e}")
-        print("Make sure discord_email_provision.py is in the same folder as this script.")
-        print("Skipping Discord/Email setup.")
+        print(f"\n[ATTENZIONE] Import di discord_email_provision fallito: {e}")
+        print("Verifica che discord_email_provision.py sia nella stessa cartella.")
+        print("Discord/Email saltati.")
+        if args.export_xlsx:
+            export_xlsx(rows, args.export_xlsx)
         return
 
-    # Collect users to process
-    if args.dry_run:
-        target_users = pending  # status hasn't changed in dry-run
-    else:
-        target_users = [r for r in rows if r.get("status", "").strip().lower() == "created"]
+    # Solo gli utenti appena processati con successo, non tutto il KV.
+    # Lo status in memoria è aggiornato anche in dry-run.
+    target_users = [u for u in pending if u.get("status") == "created"]
 
     if not target_users:
-        print("\nNo users to set up in Discord/Email.")
+        print("\nNessun utente da configurare su Discord/Email.")
+        if args.export_xlsx:
+            export_xlsx(rows, args.export_xlsx)
         return
 
-    # Group by team
     teams = {}
     for u in target_users:
-        t = u["team"].strip()
-        if t not in teams:
-            teams[t] = []
-        teams[t].append(u)
+        teams.setdefault(u["team"].strip(), []).append(u)
 
     print(f"\n{'═' * 50}")
-    print(f"DISCORD + EMAIL SETUP ({len(target_users)} users, {len(teams)} teams)")
+    print(f"DISCORD + EMAIL ({len(target_users)} utenti, {len(teams)} team)")
     print(f"{'═' * 50}")
 
-    # Ask for credentials
     discord_token = None
     resend_api_key = None
 
     if not args.skip_discord:
-        discord_token = getpass.getpass("\nDiscord bot token (Enter to skip): ")
+        discord_token = getpass.getpass("\nDiscord bot token (Invio per saltare): ")
         if not discord_token.strip():
             discord_token = None
-            print("Skipping Discord.")
+            print("Discord saltato.")
 
     if not args.skip_email:
-        resend_api_key = getpass.getpass("Resend API key (Enter to skip): ")
+        resend_api_key = getpass.getpass("Resend API key (Invio per saltare): ")
         if not resend_api_key.strip():
             resend_api_key = None
-            print("Skipping emails.")
+            print("Email saltate.")
 
-    if not discord_token and not resend_api_key:
-        print("\nBoth skipped — nothing to do.")
-        return
+    if discord_token or resend_api_key:
+        for team, team_users in teams.items():
+            provision_discord_and_email(
+                users=team_users,
+                discord_token=discord_token,
+                resend_api_key=resend_api_key,
+                category_name=args.category,
+                dry_run=args.dry_run,
+            )
+    else:
+        print("\nEntrambi saltati — niente da fare.")
 
-    for team, team_users in teams.items():
-        provision_discord_and_email(
-            users=team_users,
-            discord_token=discord_token,
-            resend_api_key=resend_api_key,
-            category_name=args.category,
-            dry_run=args.dry_run,
-        )
+    if args.export_xlsx:
+        export_xlsx(rows, args.export_xlsx)
 
     print(f"\n{'═' * 50}")
-    print("ALL DONE!")
+    print("FATTO!")
 
 
 if __name__ == "__main__":

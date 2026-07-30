@@ -1,0 +1,5 @@
+# Admin scripts dependencies.
+#   pip install -r requirements.txt
+#
+# Everything else uses the Python standard library only.
+openpyxl>=3.1

@@ -13,24 +13,31 @@ After Perforce provisioning, this module:
      - Depot/team info
 
 Can be used standalone or called from perforce_provision.py.
+In standalone mode the users are fetched from the Cloudflare Worker,
+not from a local CSV.
 
 Usage (standalone):
-    python discord_email_provision.py --csv data/users.csv --dry-run
-    python discord_email_provision.py --csv data/users.csv
+    python discord_email_provision.py --dry-run
+    python discord_email_provision.py
 
 The script will interactively ask for:
+  - Worker admin token
   - Discord bot token
-  - SMTP password
+  - Resend API key
 """
 
 import argparse
-import csv
 import getpass
 import json
 import sys
 import urllib.request
 import urllib.error
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import naba_store
+from naba_store import StoreError, mask_email
 
 
 # ══════════════════════════════════════════════════════════════
@@ -330,7 +337,7 @@ def send_email(
 ) -> bool:
     """Send an HTML email via Resend API."""
     if dry_run:
-        print(f"    [dry-run] Would send email to {to_email}")
+        print(f"    [dry-run] Would send email to {mask_email(to_email)}")
         return True
 
     payload = json.dumps({
@@ -354,21 +361,15 @@ def send_email(
     try:
         with urllib.request.urlopen(req) as resp:
             result = json.loads(resp.read().decode())
-            print(f"    [sent] Email to {to_email} (id: {result.get('id', 'ok')})")
+            print(f"    [sent] Email to {mask_email(to_email)} (id: {result.get('id', 'ok')})")
             return True
     except urllib.error.HTTPError as e:
         error_body = e.read().decode()
-        print(f"    [ERROR] Failed to send email to {to_email}: {e.code} {error_body}")
+        print(f"    [ERROR] Failed to send email to {mask_email(to_email)}: {e.code} {error_body}")
         return False
     except Exception as e:
-        print(f"    [ERROR] Failed to send email to {to_email}: {e}")
+        print(f"    [ERROR] Failed to send email to {mask_email(to_email)}: {e}")
         return False
-
-
-# ── CSV helpers ─────────────────────────────────────────────
-def read_csv(path: Path) -> list[dict]:
-    with open(path, "r", newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
 
 
 # ── Public API (called from perforce_provision.py) ──────────
@@ -478,16 +479,15 @@ def main():
         description="Discord + Email provisioning for Perforce users",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-This script processes users with status 'created' in the CSV.
+This script processes users with status 'created' on the Worker.
 Run it after perforce_provision.py, or use the integrated mode.
 
 Examples:
   python discord_email_provision.py --dry-run
-  python discord_email_provision.py --csv data/users.csv
+  python discord_email_provision.py
   python discord_email_provision.py --category "Progetti 2026"
         """,
     )
-    parser.add_argument("--csv", type=Path, default=Path("data/users.csv"))
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--category", type=str, default=DISCORD_CATEGORY_NAME,
                         help=f"Discord category name (default: {DISCORD_CATEGORY_NAME})")
@@ -495,9 +495,19 @@ Examples:
     parser.add_argument("--skip-email", action="store_true", help="Skip email sending")
     args = parser.parse_args()
 
-    if not args.csv.exists():
-        print(f"ERROR: CSV not found: {args.csv}")
+    # Fetch users from the Worker
+    print(f"Worker: {naba_store.worker_url()}")
+    admin_token = naba_store.get_admin_token()
+
+    try:
+        created = naba_store.fetch_users(admin_token, status="created")
+    except StoreError as e:
+        print(f"ERROR: {e}")
         sys.exit(1)
+
+    if not created:
+        print("No 'created' users to process. Run perforce_provision.py first.")
+        return
 
     # Interactive credential prompts
     discord_token = None
@@ -514,15 +524,6 @@ Examples:
         if not resend_api_key.strip():
             print("No key entered — skipping emails.")
             resend_api_key = None
-
-    # Read CSV and group by team
-    rows = read_csv(args.csv)
-    # Process users that have been created in Perforce but not yet set up in Discord
-    created = [r for r in rows if r.get("status", "").strip().lower() == "created"]
-
-    if not created:
-        print("No 'created' users to process. Run perforce_provision.py first.")
-        return
 
     # Group by team
     teams = {}
