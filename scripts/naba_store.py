@@ -6,7 +6,8 @@ Client per il Worker Cloudflare che fa da storage dei dati utente.
 Sostituisce il vecchio CSV committato nella repo: nessun dato personale
 tocca più il filesystem del progetto.
 
-Usato da perforce_provision.py, export_p4_users.py e migrate_to_kv.py.
+Usato da perforce_provision.py, export_p4_users.py, kv_status.py e
+discord_email_provision.py.
 
 Il token admin si prende, in ordine:
   1. variabile d'ambiente NABA_ADMIN_TOKEN

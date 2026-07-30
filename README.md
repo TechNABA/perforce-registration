@@ -68,8 +68,6 @@ The form is a static page. A Cloudflare Worker is the only backend: it validates
 
 Static HTML, CSS and JavaScript on the front end. A Cloudflare Worker with KV storage as the backend. Python 3.10+ for the administrative tooling, using the standard library plus `openpyxl` for spreadsheet export. Perforce Helix Core as the version control server, with Discord and a transactional email service for communication.
 
-The Worker ships with a test suite covering routing, authentication, validation, storage, and pagination.
-
 ---
 
 *Leonardo Villa — Digital Tech Laboratory Specialist, Nuova Accademia di Belle Arti, Milan*
