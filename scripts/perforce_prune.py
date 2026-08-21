@@ -9,6 +9,10 @@ and removes them along with their workspaces.
 This is useful for cleaning up orphaned accounts — users who were
 removed from all groups but whose account still exists.
 
+Server, user and password are asked in sequence at every run: the address
+depends on the network you are working from, and from the virtual studio VLAN
+the server is only reachable by IP.
+
 Usage:
     python perforce_prune.py --dry-run          # preview who would be removed
     python perforce_prune.py                     # execute removal
@@ -25,11 +29,15 @@ import sys
 # ══════════════════════════════════════════════════════════════
 # CONFIGURATION
 # ══════════════════════════════════════════════════════════════
-P4PORT = "perforce.naba.it:1666"
-P4USER = "villal"
+# Server, user and password are asked at every run: no server address and no
+# account are left in the code, and the repo is public. It is also needed
+# because from the virtual studio VLAN the server is only reachable by IP.
+P4PORT = ""
+P4USER = ""
 P4PASSWD = ""
 
-# Users that should never be removed (service accounts, admins)
+# Users that should never be removed (service accounts, admins).
+# The connecting account is added to this set at runtime.
 ALWAYS_KEEP = {
     "villal",
 }
@@ -54,6 +62,27 @@ def p4(cmd: str, stdin_text: str = None) -> subprocess.CompletedProcess:
         input=stdin_text,
         env=get_p4_env(),
     )
+
+
+def ask_p4_connection() -> None:
+    """
+    Ask for server, user and password, in that order, at every run.
+    The address depends on the network you are working from, so it has no
+    default: from the virtual studio VLAN it has to be given as an IP.
+    """
+    global P4PORT, P4USER, P4PASSWD
+
+    P4PORT = input("Perforce server (host:port): ").strip()
+    if not P4PORT:
+        print("ERROR: the server address is required.")
+        sys.exit(1)
+
+    P4USER = input("Perforce user: ").strip()
+    if not P4USER:
+        print("ERROR: the user is required.")
+        sys.exit(1)
+
+    P4PASSWD = getpass.getpass(f"Password for {P4USER}: ")
 
 
 def get_all_users() -> list[str]:
@@ -153,6 +182,8 @@ A user is considered to have "no depot access" if:
   - They are NOT a member of any group that has protections
   - They are NOT directly referenced in the protections table
 
+Server, user and password are asked at startup, in that order.
+
 Examples:
   python perforce_prune.py --dry-run
   python perforce_prune.py
@@ -165,17 +196,15 @@ Examples:
                         help="Comma-separated list of extra usernames to never remove")
     args = parser.parse_args()
 
-    # Build keep list
+    # Server, user, password
+    ask_p4_connection()
+
+    # Build keep list — the connecting account is never a candidate
     keep = set(ALWAYS_KEEP)
+    keep.add(P4USER.lower())
     if args.keep:
         for u in args.keep.split(","):
             keep.add(u.strip().lower())
-
-    # Password
-    global P4PASSWD
-    print(f"Server: {P4PORT}")
-    print(f"User:   {P4USER}")
-    P4PASSWD = getpass.getpass(f"Password for {P4USER}: ")
 
     # Connect
     print(f"\nConnecting to {P4PORT}...")

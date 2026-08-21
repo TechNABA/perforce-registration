@@ -12,6 +12,10 @@ Lo script:
   3. Legge i gruppi e mappa utente → gruppo (= team)
   4. Manda tutto al Worker
 
+Server, utente e password Perforce vengono chiesti in sequenza a ogni
+esecuzione: l'indirizzo cambia con la rete da cui si lavora e dalla VLAN del
+virtual studio il server si raggiunge solo per IP.
+
 Uso:
     python export_p4_users.py                    # invia al Worker
     python export_p4_users.py --skip-existing    # non sovrascrive i record già nel KV
@@ -37,11 +41,15 @@ from naba_store import FIELDS, StoreError
 # ══════════════════════════════════════════════════════════════
 # CONFIGURAZIONE
 # ══════════════════════════════════════════════════════════════
-P4PORT = "perforce.naba.it:1666"
-P4USER = "villal"
+# Server, utente e password vengono chiesti a ogni esecuzione: nel codice non
+# resta né l'indirizzo del server né un account, e la repo è pubblica. Serve
+# anche perché dalla VLAN del virtual studio il server si raggiunge solo per IP.
+P4PORT = ""
+P4USER = ""
 P4PASSWD = ""
 
 # Utenti esclusi dall'export (account di servizio, admin, ecc.)
+# L'utente con cui ci si connette viene aggiunto a runtime.
 EXCLUDE_USERS = {
     "villal",       # account admin — aggiungerne altri qui se serve
 }
@@ -66,6 +74,30 @@ def p4(cmd: str, stdin_text: str = None) -> subprocess.CompletedProcess:
         input=stdin_text,
         env=get_p4_env(),
     )
+
+
+def ask_p4_connection() -> None:
+    """
+    Chiede server, utente e password, in quest'ordine, a ogni esecuzione.
+    L'indirizzo cambia a seconda della rete da cui si lavora, quindi non ha
+    un default: dalla VLAN del virtual studio va indicato per IP.
+    """
+    global P4PORT, P4USER, P4PASSWD
+
+    P4PORT = input("Server Perforce (host:porta): ").strip()
+    if not P4PORT:
+        print("ERRORE: serve l'indirizzo del server.")
+        sys.exit(1)
+
+    P4USER = input("Utente Perforce: ").strip()
+    if not P4USER:
+        print("ERRORE: serve l'utente.")
+        sys.exit(1)
+
+    P4PASSWD = getpass.getpass(f"Password per {P4USER}: ")
+
+    # L'admin connesso non finisce mai nell'export verso il KV.
+    EXCLUDE_USERS.add(P4USER)
 
 
 def get_all_users() -> list[dict]:
@@ -150,11 +182,8 @@ def main():
                         help="Salva anche un CSV locale (contiene dati personali)")
     args = parser.parse_args()
 
-    # Password Perforce
-    global P4PASSWD
-    print(f"Server: {P4PORT}")
-    print(f"Utente: {P4USER}")
-    P4PASSWD = getpass.getpass(f"Password per {P4USER}: ")
+    # Server, utente, password Perforce
+    ask_p4_connection()
 
     print(f"\nConnessione a {P4PORT}...")
     result = p4("info")

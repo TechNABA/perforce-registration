@@ -10,8 +10,10 @@ Scarica gli utenti dal Worker Cloudflare e, per ognuno con status 'pending':
   5. Aggiunge la protezione write per il gruppo sul depot
   6. Aggiorna lo status a 'created' sul Worker
 
-Password Perforce e token admin vengono chiesti a runtime (input nascosto,
-non salvati da nessuna parte).
+Token admin, server, utente e password Perforce vengono chiesti in sequenza a
+ogni esecuzione, e non sono salvati da nessuna parte. L'indirizzo del server
+cambia con la rete da cui si lavora: dalla VLAN del virtual studio va indicato
+per IP.
 
 Uso:
     python perforce_provision.py                            # provisioning
@@ -36,9 +38,12 @@ from naba_store import StoreError
 # ══════════════════════════════════════════════════════════════
 # CONFIGURAZIONE
 # ══════════════════════════════════════════════════════════════
-P4PORT = "perforce.naba.it:1666"
-P4USER = "villal"
-P4PASSWD = ""  # impostata a runtime dal prompt
+# Server, utente e password vengono chiesti a ogni esecuzione: nel codice non
+# resta né l'indirizzo del server né un account, e la repo è pubblica. Serve
+# anche perché dalla VLAN del virtual studio il server si raggiunge solo per IP.
+P4PORT = ""
+P4USER = ""
+P4PASSWD = ""
 # ══════════════════════════════════════════════════════════════
 
 
@@ -63,6 +68,27 @@ def p4(cmd: str, stdin_text: str = None) -> subprocess.CompletedProcess:
         input=stdin_text,
         env=get_p4_env(),
     )
+
+
+def ask_p4_connection() -> None:
+    """
+    Chiede server, utente e password, in quest'ordine, a ogni esecuzione.
+    L'indirizzo cambia a seconda della rete da cui si lavora, quindi non ha
+    un default: dalla VLAN del virtual studio va indicato per IP.
+    """
+    global P4PORT, P4USER, P4PASSWD
+
+    P4PORT = input("Server Perforce (host:porta): ").strip()
+    if not P4PORT:
+        print("ERRORE: serve l'indirizzo del server.")
+        sys.exit(1)
+
+    P4USER = input("Utente Perforce: ").strip()
+    if not P4USER:
+        print("ERRORE: serve l'utente.")
+        sys.exit(1)
+
+    P4PASSWD = getpass.getpass(f"Password per {P4USER}: ")
 
 
 def p4_user_exists(username: str) -> bool:
@@ -264,6 +290,8 @@ def main():
         description="Provisioning utenti Perforce dai dati sul Worker Cloudflare",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+Server, utente e password Perforce vengono chiesti all'avvio, in quest'ordine.
+
 Esempi:
   python perforce_provision.py --dry-run
   python perforce_provision.py
@@ -294,11 +322,9 @@ Esempi:
 
     print(f"Scaricati {len(rows)} record dal KV")
 
-    # ── Password Perforce ──
-    global P4PASSWD
-    print(f"\nServer: {P4PORT}")
-    print(f"Utente: {P4USER}")
-    P4PASSWD = getpass.getpass(f"Password per {P4USER}: ")
+    # ── Server, utente, password Perforce ──
+    print()
+    ask_p4_connection()
 
     print(f"Connessione a {P4PORT}...")
     result = p4("info")
