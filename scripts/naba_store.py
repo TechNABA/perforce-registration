@@ -211,9 +211,20 @@ def delete_user(token: str, username: str, team: str = None) -> int:
     return result.get("deleted", 0)
 
 
-def purge(token: str) -> int:
-    """Svuota il KV. Irreversibile."""
-    result = _request("DELETE", "/purge", token, params={"confirm": "CONFIRM"})
+def purge(token: str, confirm: str) -> int:
+    """
+    Svuota il KV. Irreversibile.
+
+    La conferma la passa il chiamante e deve valere esattamente "CONFIRM": se
+    se la autocompilasse il client, il controllo lato Worker non fermerebbe mai
+    niente e basterebbe una riga di Python distratta per svuotare tutto.
+    """
+    if confirm != "CONFIRM":
+        raise StoreError(
+            "purge richiede confirm='CONFIRM' passato esplicitamente dal chiamante"
+        )
+
+    result = _request("DELETE", "/purge", token, params={"confirm": confirm})
     if not result.get("success"):
         raise StoreError(f"purge fallito: {result.get('error', 'errore sconosciuto')}")
     return result.get("deleted", 0)

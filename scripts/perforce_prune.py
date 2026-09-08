@@ -4,7 +4,7 @@ perforce_prune.py
 
 Finds all Perforce users who have no access to any depot
 (no group membership with protections, no direct user protections)
-and removes them along with their workspaces.
+and removes them along with their workspaces and pending changelists.
 
 This is useful for cleaning up orphaned accounts — users who were
 removed from all groups but whose account still exists.
@@ -16,78 +16,33 @@ the server is only reachable by IP.
 Usage:
     python perforce_prune.py --dry-run          # preview who would be removed
     python perforce_prune.py                     # execute removal
-    python perforce_prune.py --keep admin,villal # extra users to never remove
+    python perforce_prune.py --keep admin,bot    # extra users to never remove
 """
 
 import argparse
-import getpass
-import os
-import subprocess
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import p4_common as p4c
 
 
 # ══════════════════════════════════════════════════════════════
 # CONFIGURATION
 # ══════════════════════════════════════════════════════════════
-# Server, user and password are asked at every run: no server address and no
-# account are left in the code, and the repo is public. It is also needed
-# because from the virtual studio VLAN the server is only reachable by IP.
-P4PORT = ""
-P4USER = ""
-P4PASSWD = ""
-
-# Users that should never be removed (service accounts, admins).
-# The connecting account is added to this set at runtime.
-ALWAYS_KEEP = {
-    "villal",
-}
+# No protected account is hardcoded here: the repo is public, and the one
+# account that always has to be protected is the one you connect with, which is
+# only known at runtime. Service accounts go in --keep.
+#
+# The connection is created in main() and passed to the p4_common functions.
+P4 = None
 # ══════════════════════════════════════════════════════════════
-
-
-def get_p4_env() -> dict:
-    env = os.environ.copy()
-    env["P4PORT"] = P4PORT
-    env["P4USER"] = P4USER
-    if P4PASSWD:
-        env["P4PASSWD"] = P4PASSWD
-    return env
-
-
-def p4(cmd: str, stdin_text: str = None) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        f"p4 {cmd}",
-        shell=True,
-        capture_output=True,
-        text=True,
-        input=stdin_text,
-        env=get_p4_env(),
-    )
-
-
-def ask_p4_connection() -> None:
-    """
-    Ask for server, user and password, in that order, at every run.
-    The address depends on the network you are working from, so it has no
-    default: from the virtual studio VLAN it has to be given as an IP.
-    """
-    global P4PORT, P4USER, P4PASSWD
-
-    P4PORT = input("Perforce server (host:port): ").strip()
-    if not P4PORT:
-        print("ERROR: the server address is required.")
-        sys.exit(1)
-
-    P4USER = input("Perforce user: ").strip()
-    if not P4USER:
-        print("ERROR: the user is required.")
-        sys.exit(1)
-
-    P4PASSWD = getpass.getpass(f"Password for {P4USER}: ")
 
 
 def get_all_users() -> list[str]:
     """Get all Perforce usernames."""
-    result = p4("users")
+    result = P4.run("users")
     users = []
     for line in result.stdout.strip().split("\n"):
         if line.strip():
@@ -95,40 +50,28 @@ def get_all_users() -> list[str]:
     return users
 
 
+def get_all_groups() -> list[str]:
+    result = P4.run("groups")
+    return [line.strip() for line in result.stdout.strip().split("\n") if line.strip()]
+
+
 def get_users_in_groups() -> set[str]:
     """Get all users who belong to at least one group."""
-    result = p4("groups")
     users_with_groups = set()
-
-    for group_name in result.stdout.strip().split("\n"):
-        group_name = group_name.strip()
-        if not group_name:
-            continue
-
-        spec = p4(f"group -o {group_name}")
-        in_users = False
-        for line in spec.stdout.split("\n"):
-            if line.startswith("Users:"):
-                in_users = True
-                continue
-            if in_users:
-                if line.startswith("\t"):
-                    users_with_groups.add(line.strip())
-                else:
-                    break
-
+    for group_name in get_all_groups():
+        spec = P4.run("group", "-o", group_name)
+        users_with_groups.update(p4c.parse_group_members(spec.stdout))
     return users_with_groups
 
 
 def get_users_in_protections() -> set[str]:
     """Get all users who are directly referenced in the protections table."""
-    result = p4("protect -o")
+    result = P4.run("protect", "-o")
     users_with_protections = set()
 
     for line in result.stdout.split("\n"):
-        stripped = line.strip()
         # Match lines like: write user mario_rossi * //depot/...
-        parts = stripped.split()
+        parts = line.strip().split()
         if len(parts) >= 4 and parts[1] == "user":
             users_with_protections.add(parts[2])
 
@@ -137,40 +80,15 @@ def get_users_in_protections() -> set[str]:
 
 def get_groups_in_protections() -> set[str]:
     """Get all groups referenced in the protections table."""
-    result = p4("protect -o")
+    result = P4.run("protect", "-o")
     groups = set()
 
     for line in result.stdout.split("\n"):
-        stripped = line.strip()
-        parts = stripped.split()
+        parts = line.strip().split()
         if len(parts) >= 4 and parts[1] == "group":
             groups.add(parts[2])
 
     return groups
-
-
-def get_user_workspaces(username: str) -> list[str]:
-    result = p4(f"clients -u {username}")
-    workspaces = []
-    for line in result.stdout.strip().split("\n"):
-        if line.startswith("Client "):
-            workspaces.append(line.split(" ")[1])
-    return workspaces
-
-
-def delete_workspace(ws_name: str, dry_run: bool = False) -> bool:
-    if dry_run:
-        return True
-    p4(f"-c {ws_name} revert //...")
-    result = p4(f"client -d -f {ws_name}")
-    return result.returncode == 0
-
-
-def delete_user(username: str, dry_run: bool = False) -> bool:
-    if dry_run:
-        return True
-    result = p4(f"user -d -f {username}")
-    return result.returncode == 0
 
 
 def main():
@@ -181,6 +99,10 @@ def main():
 A user is considered to have "no depot access" if:
   - They are NOT a member of any group that has protections
   - They are NOT directly referenced in the protections table
+
+The account you connect with is always protected. Any other account that must
+never be removed — service accounts, other admins — has to be listed in --keep:
+nothing is hardcoded, because this repo is public.
 
 Server, user and password are asked at startup, in that order.
 
@@ -197,18 +119,19 @@ Examples:
     args = parser.parse_args()
 
     # Server, user, password
-    ask_p4_connection()
+    global P4
+    P4 = p4c.ask_p4_connection()
 
     # Build keep list — the connecting account is never a candidate
-    keep = set(ALWAYS_KEEP)
-    keep.add(P4USER.lower())
+    keep = {P4.user.lower()}
     if args.keep:
         for u in args.keep.split(","):
-            keep.add(u.strip().lower())
+            if u.strip():
+                keep.add(u.strip().lower())
 
     # Connect
-    print(f"\nConnecting to {P4PORT}...")
-    result = p4("info")
+    print(f"\nConnecting to {P4.port}...")
+    result = p4c.connect(P4)
     if result.returncode != 0:
         print(f"ERROR: Cannot connect: {result.stderr.strip()}")
         sys.exit(1)
@@ -239,24 +162,11 @@ Examples:
     users_with_effective_access.update(users_in_protections)
 
     # Users in groups that have protections
-    result_groups = p4("groups")
-    for group_name in result_groups.stdout.strip().split("\n"):
-        group_name = group_name.strip()
-        if not group_name:
-            continue
+    for group_name in get_all_groups():
         if group_name in groups_in_protections:
             # This group has depot access — all its members have access
-            spec = p4(f"group -o {group_name}")
-            in_users = False
-            for line in spec.stdout.split("\n"):
-                if line.startswith("Users:"):
-                    in_users = True
-                    continue
-                if in_users:
-                    if line.startswith("\t"):
-                        users_with_effective_access.add(line.strip())
-                    else:
-                        break
+            spec = P4.run("group", "-o", group_name)
+            users_with_effective_access.update(p4c.parse_group_members(spec.stdout))
 
     print(f"\n  Users with effective depot access: {len(users_with_effective_access)}")
 
@@ -277,7 +187,7 @@ Examples:
     print(f"ORPHANED USERS: {len(orphaned)} user(s) with no depot access")
     print(f"{'═' * 60}")
     for u in sorted(orphaned):
-        ws_count = len(get_user_workspaces(u))
+        ws_count = len(p4c.user_workspaces(P4, u))
         ws_info = f"({ws_count} workspace{'s' if ws_count != 1 else ''})" if ws_count > 0 else ""
         print(f"  {u:<30} {ws_info}")
 
@@ -294,25 +204,37 @@ Examples:
     # Process removals
     removed = 0
     errors = 0
+    tag = "dry-run" if args.dry_run else None
 
     for user in sorted(orphaned):
         print(f"\n{'─' * 40}")
         print(f"Removing: {user}")
 
-        # Delete workspaces first
-        workspaces = get_user_workspaces(user)
-        for ws in workspaces:
-            if delete_workspace(ws, args.dry_run):
-                print(f"  [{'dry-run' if args.dry_run else 'deleted'}] Workspace '{ws}'")
+        # Pending changelists first: they keep files open and block the account
+        for change in p4c.pending_changes(P4, user):
+            ok, err = p4c.delete_pending_change(P4, change, args.dry_run)
+            if ok:
+                print(f"  [{tag or 'deleted'}] Changelist {change}")
             else:
-                print(f"  [ERROR] Could not delete workspace '{ws}'")
+                print(f"  [ERROR] Could not delete changelist {change}: {err}")
+                errors += 1
 
-        # Delete user
-        if delete_user(user, args.dry_run):
-            print(f"  [{'dry-run' if args.dry_run else 'deleted'}] User '{user}'")
+        # Then workspaces
+        for ws in p4c.user_workspaces(P4, user):
+            ok, err = p4c.delete_workspace(P4, ws, args.dry_run)
+            if ok:
+                print(f"  [{tag or 'deleted'}] Workspace '{ws}'")
+            else:
+                print(f"  [ERROR] Could not delete workspace '{ws}': {err}")
+                errors += 1
+
+        # And finally the account
+        ok, err = p4c.delete_user(P4, user, args.dry_run)
+        if ok:
+            print(f"  [{tag or 'deleted'}] User '{user}'")
             removed += 1
         else:
-            print(f"  [ERROR] Could not delete user '{user}'")
+            print(f"  [ERROR] Could not delete user '{user}': {err}")
             errors += 1
 
     print(f"\n{'═' * 60}")

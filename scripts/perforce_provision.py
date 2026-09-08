@@ -18,21 +18,27 @@ per IP.
 Uso:
     python perforce_provision.py                            # provisioning
     python perforce_provision.py --dry-run                  # anteprima
-    python perforce_provision.py --password changeme        # password iniziale
+    python perforce_provision.py --skip-discord             # niente ruoli/canali
+    python perforce_provision.py --skip-email               # niente email
+    python perforce_provision.py --category Tesi            # categoria Discord
     python perforce_provision.py --export-xlsx utenti.xlsx  # XLSX in locale
+
+La password iniziale degli account studente si digita a runtime insieme alle
+altre credenziali: da riga di comando resterebbe leggibile negli argomenti del
+processo e nella cronologia della shell.
 """
 
 import argparse
 import getpass
-import os
-import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import naba_store
+import p4_common as p4c
 from naba_store import StoreError
+from p4_common import P4Error
 
 
 # ══════════════════════════════════════════════════════════════
@@ -41,66 +47,23 @@ from naba_store import StoreError
 # Server, utente e password vengono chiesti a ogni esecuzione: nel codice non
 # resta né l'indirizzo del server né un account, e la repo è pubblica. Serve
 # anche perché dalla VLAN del virtual studio il server si raggiunge solo per IP.
-P4PORT = ""
-P4USER = ""
-P4PASSWD = ""
+#
+# La connessione viene creata in main() e usata dalle funzioni qui sotto.
+P4 = None
 # ══════════════════════════════════════════════════════════════
 
 
 # ── helper p4 ───────────────────────────────────────────────────
-def get_p4_env() -> dict:
-    """Environment con le impostazioni Perforce."""
-    env = os.environ.copy()
-    env["P4PORT"] = P4PORT
-    env["P4USER"] = P4USER
-    if P4PASSWD:
-        env["P4PASSWD"] = P4PASSWD
-    return env
-
-
-def p4(cmd: str, stdin_text: str = None) -> subprocess.CompletedProcess:
-    """Esegue un comando p4 con server/utente/password configurati."""
-    return subprocess.run(
-        f"p4 {cmd}",
-        shell=True,
-        capture_output=True,
-        text=True,
-        input=stdin_text,
-        env=get_p4_env(),
-    )
-
-
-def ask_p4_connection() -> None:
-    """
-    Chiede server, utente e password, in quest'ordine, a ogni esecuzione.
-    L'indirizzo cambia a seconda della rete da cui si lavora, quindi non ha
-    un default: dalla VLAN del virtual studio va indicato per IP.
-    """
-    global P4PORT, P4USER, P4PASSWD
-
-    P4PORT = input("Server Perforce (host:porta): ").strip()
-    if not P4PORT:
-        print("ERRORE: serve l'indirizzo del server.")
-        sys.exit(1)
-
-    P4USER = input("Utente Perforce: ").strip()
-    if not P4USER:
-        print("ERRORE: serve l'utente.")
-        sys.exit(1)
-
-    P4PASSWD = getpass.getpass(f"Password per {P4USER}: ")
-
-
 def p4_user_exists(username: str) -> bool:
-    return username in p4(f"users {username}").stdout
+    return username in P4.run("users", username).stdout
 
 
 def p4_group_exists(group_name: str) -> bool:
-    return group_name in p4("groups").stdout.split()
+    return group_name in P4.run("groups").stdout.split()
 
 
 def p4_depot_exists(depot_name: str) -> bool:
-    for line in p4("depots").stdout.strip().split("\n"):
+    for line in P4.run("depots").stdout.strip().split("\n"):
         if line.startswith(f"Depot {depot_name} "):
             return True
     return False
@@ -111,17 +74,19 @@ def create_user(username: str, full_name: str, email: str, password: str = None,
         print(f"    [skip] Utente '{username}' già esistente")
         return True
 
+    # Nome ed email arrivano dal form pubblico: tab e a capo spezzerebbero lo
+    # spec e permetterebbero di iniettare campi che non abbiamo scritto noi.
     spec = (
         f"User:\t{username}\n"
-        f"Email:\t{email}\n"
-        f"FullName:\t{full_name}\n"
+        f"Email:\t{p4c.clean_spec_value(email)}\n"
+        f"FullName:\t{p4c.clean_spec_value(full_name)}\n"
     )
 
     if dry_run:
         print(f"    [dry-run] Creerebbe l'utente '{username}'")
         return True
 
-    result = p4("user -f -i", stdin_text=spec)
+    result = P4.run("user", "-f", "-i", stdin_text=spec)
     if result.returncode != 0:
         print(f"    [ERRORE] Creazione utente '{username}' fallita: {result.stderr.strip()}")
         return False
@@ -129,7 +94,7 @@ def create_user(username: str, full_name: str, email: str, password: str = None,
     print(f"    [creato] Utente '{username}'")
 
     if password:
-        result = p4(f"-u {username} passwd", stdin_text=f"{password}\n{password}\n")
+        result = P4.run("-u", username, "passwd", stdin_text=f"{password}\n{password}\n")
         if result.returncode == 0:
             print(f"    [password] Impostata per '{username}'")
         else:
@@ -156,7 +121,7 @@ def create_group(group_name: str, dry_run: bool = False) -> bool:
         print(f"    [dry-run] Creerebbe il gruppo '{group_name}'")
         return True
 
-    result = p4("group -i", stdin_text=spec)
+    result = P4.run("group", "-i", stdin_text=spec)
     if result.returncode != 0:
         print(f"    [ERRORE] Creazione gruppo '{group_name}' fallita: {result.stderr.strip()}")
         return False
@@ -166,50 +131,22 @@ def create_group(group_name: str, dry_run: bool = False) -> bool:
 
 
 def add_user_to_group(username: str, group_name: str, dry_run: bool = False) -> bool:
-    result = p4(f"group -o {group_name}")
+    result = P4.run("group", "-o", group_name)
     if result.returncode != 0:
         print(f"    [ERRORE] Gruppo '{group_name}' non leggibile: {result.stderr.strip()}")
         return False
 
-    spec_lines = result.stdout.strip().split("\n")
+    new_spec, already_there = p4c.add_user_to_group_spec(result.stdout, username)
 
-    in_users_section = False
-    user_already_added = False
-    for line in spec_lines:
-        if line.startswith("Users:"):
-            in_users_section = True
-            continue
-        if in_users_section:
-            if line.startswith("\t"):
-                if line.strip() == username:
-                    user_already_added = True
-                    break
-            else:
-                break
-
-    if user_already_added:
+    if already_there:
         print(f"    [skip] Utente '{username}' già nel gruppo '{group_name}'")
         return True
-
-    new_spec_lines = []
-    users_section_found = False
-    for line in spec_lines:
-        new_spec_lines.append(line)
-        if line.startswith("Users:"):
-            users_section_found = True
-            new_spec_lines.append(f"\t{username}")
-
-    if not users_section_found:
-        new_spec_lines.append("Users:")
-        new_spec_lines.append(f"\t{username}")
-
-    new_spec = "\n".join(new_spec_lines) + "\n"
 
     if dry_run:
         print(f"    [dry-run] Aggiungerebbe '{username}' al gruppo '{group_name}'")
         return True
 
-    result = p4("group -i", stdin_text=new_spec)
+    result = P4.run("group", "-i", stdin_text=new_spec)
     if result.returncode != 0:
         print(f"    [ERRORE] '{username}' non aggiunto al gruppo '{group_name}': {result.stderr.strip()}")
         return False
@@ -233,7 +170,7 @@ def create_depot(depot_name: str, dry_run: bool = False) -> bool:
         print(f"    [dry-run] Creerebbe il depot '{depot_name}'")
         return True
 
-    result = p4("depot -i", stdin_text=spec)
+    result = P4.run("depot", "-i", stdin_text=spec)
     if result.returncode != 0:
         print(f"    [ERRORE] Creazione depot '{depot_name}' fallita: {result.stderr.strip()}")
         return False
@@ -243,7 +180,7 @@ def create_depot(depot_name: str, dry_run: bool = False) -> bool:
 
 
 def add_protection(group_name: str, depot_name: str, dry_run: bool = False) -> bool:
-    result = p4("protect -o")
+    result = P4.run("protect", "-o")
     if result.returncode != 0:
         print(f"    [ERRORE] Protezioni non leggibili: {result.stderr.strip()}")
         return False
@@ -261,7 +198,7 @@ def add_protection(group_name: str, depot_name: str, dry_run: bool = False) -> b
 
     new_spec = protect_spec.rstrip() + "\n" + prot_line + "\n"
 
-    result = p4("protect -i", stdin_text=new_spec)
+    result = P4.run("protect", "-i", stdin_text=new_spec)
     if result.returncode != 0:
         print(f"    [ERRORE] Aggiornamento protezioni fallito: {result.stderr.strip()}")
         return False
@@ -291,17 +228,19 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Server, utente e password Perforce vengono chiesti all'avvio, in quest'ordine.
+Anche la password iniziale degli studenti si digita a runtime: da riga di
+comando resterebbe leggibile negli argomenti del processo e nella cronologia
+della shell.
 
 Esempi:
   python perforce_provision.py --dry-run
   python perforce_provision.py
-  python perforce_provision.py --password Welcome2026!
+  python perforce_provision.py --skip-discord --skip-email
+  python perforce_provision.py --category Tesi
   python perforce_provision.py --export-xlsx ~/Desktop/utenti.xlsx
         """,
     )
     parser.add_argument("--dry-run", action="store_true", help="Anteprima senza modifiche")
-    parser.add_argument("--password", type=str, default=None,
-                        help="Password iniziale per i nuovi utenti Perforce")
     parser.add_argument("--skip-discord", action="store_true", help="Salta creazione ruoli/canali Discord")
     parser.add_argument("--skip-email", action="store_true", help="Salta invio email di benvenuto")
     parser.add_argument("--category", type=str, default="Tesi",
@@ -323,15 +262,22 @@ Esempi:
     print(f"Scaricati {len(rows)} record dal KV")
 
     # ── Server, utente, password Perforce ──
+    global P4
     print()
-    ask_p4_connection()
+    P4 = p4c.ask_p4_connection()
 
-    print(f"Connessione a {P4PORT}...")
-    result = p4("info")
+    # Password iniziale degli account studente: chiesta qui, mai da riga di
+    # comando, dove sarebbe leggibile da chiunque altro usi la macchina.
+    initial_password = getpass.getpass(
+        "Password iniziale per i nuovi utenti (Invio per non impostarla): "
+    ) or None
+
+    print(f"Connessione a {P4.port}...")
+    result = p4c.connect(P4)
     if result.returncode != 0:
         print("ERRORE: connessione al server Perforce fallita.")
-        print(f"  Server: {P4PORT}")
-        print(f"  Utente: {P4USER}")
+        print(f"  Server: {P4.port}")
+        print(f"  Utente: {P4.user}")
         print(f"  Errore: {result.stderr.strip()}")
         print()
         print("Verifica che:")
@@ -364,10 +310,28 @@ Esempi:
     error_count = 0
 
     for user in pending:
-        username = user["username"].strip()
         full_name = user["full_name"].strip()
         email = user["email"].strip()
-        team = user["team"].strip()
+
+        # Username e team finiscono in comandi p4 e negli spec: un valore che
+        # non passa la validazione non arriva mai al server, il record va in
+        # 'error' e il giro prosegue con gli altri.
+        try:
+            username = p4c.check_p4_name(user["username"], "username")
+            team = p4c.check_p4_name(user["team"], "team")
+        except P4Error as e:
+            bad_username = user.get("username", "").strip()
+            print(f"{'─' * 50}")
+            print(f"Elaborazione: {bad_username!r}")
+            print(f"    [ERRORE] Record scartato: {e}")
+            user["status"] = "error"
+            status_updates.append({
+                "username": bad_username,
+                "team": user.get("team", "").strip(),
+                "status": "error",
+            })
+            error_count += 1
+            continue
 
         print(f"{'─' * 50}")
         # Nome completo ed email non vanno a schermo: restano solo nel record.
@@ -377,7 +341,7 @@ Esempi:
         all_ok = True
 
         # 1. Utente
-        if not create_user(username, full_name, email, args.password, args.dry_run):
+        if not create_user(username, full_name, email, initial_password, args.dry_run):
             all_ok = False
 
         # 2. Gruppo + depot + protezione (una volta per team)

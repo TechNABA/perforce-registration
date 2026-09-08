@@ -14,14 +14,13 @@ Per ogni team dell'utente:
 Cosa NON tocca, di proposito:
   - il depot del team, che contiene il lavoro degli altri
   - le protezioni, che sono sul gruppo e non sull'utente
-  - Discord: ruoli, canali e inviti vanno rimossi a mano
+  - Discord: ruoli, canali e inviti vanno rimossi a mano, e a fine esecuzione
+    lo script stampa cosa cercare
 
-Password Perforce e token admin vengono chiesti a runtime (input nascosto,
-non salvati da nessuna parte).
-
-Server, utente e password Perforce vengono chiesti in sequenza a ogni
-esecuzione: l'indirizzo cambia con la rete da cui si lavora e dalla VLAN del
-virtual studio il server si raggiunge solo per IP.
+Token admin, server, utente e password Perforce vengono chiesti in sequenza a
+ogni esecuzione e non sono salvati da nessuna parte. L'indirizzo del server
+cambia con la rete da cui si lavora: dalla VLAN del virtual studio va indicato
+per IP.
 
 Uso:
     python perforce_cleanup.py --user mario_rossi --dry-run   # anteprima
@@ -31,192 +30,45 @@ Uso:
 """
 
 import argparse
-import getpass
-import os
-import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import naba_store
+import p4_common as p4c
 from naba_store import StoreError
+from p4_common import P4Error
 
 
 # ══════════════════════════════════════════════════════════════
 # CONFIGURAZIONE
 # ══════════════════════════════════════════════════════════════
-# Server, utente e password vengono chiesti a ogni esecuzione: nel codice non
-# resta né l'indirizzo del server né un account, e la repo è pubblica. Serve
-# anche perché dalla VLAN del virtual studio il server si raggiunge solo per IP.
-P4PORT = ""
-P4USER = ""
-P4PASSWD = ""
-
-# Account che non vanno mai rimossi, qualunque cosa si scriva in --user.
-# A runtime si aggiunge anche l'utente con cui ci si connette.
-ALWAYS_KEEP = {
-    "villal",
-}
+# Nessun account protetto è scritto qui: l'unico che va difeso sempre è quello
+# con cui ci si connette, e quello si conosce solo a runtime. Gli account di
+# servizio che non devono mai sparire si passano a perforce_prune.py con --keep.
+#
+# La connessione viene creata in main() e passata alle funzioni di p4_common.
+P4 = None
 # ══════════════════════════════════════════════════════════════
 
 
-# ── helper p4 ───────────────────────────────────────────────────
-def get_p4_env() -> dict:
-    """Environment con le impostazioni Perforce."""
-    env = os.environ.copy()
-    env["P4PORT"] = P4PORT
-    env["P4USER"] = P4USER
-    if P4PASSWD:
-        env["P4PASSWD"] = P4PASSWD
-    return env
-
-
-def p4(cmd: str, stdin_text: str = None) -> subprocess.CompletedProcess:
-    """Esegue un comando p4 con server/utente/password configurati."""
-    return subprocess.run(
-        f"p4 {cmd}",
-        shell=True,
-        capture_output=True,
-        text=True,
-        input=stdin_text,
-        env=get_p4_env(),
-    )
-
-
-def ask_p4_connection() -> None:
+def find_kv_matches(rows: list[dict], username: str, team: str = None) -> list[dict]:
     """
-    Chiede server, utente e password, in quest'ordine, a ogni esecuzione.
-    L'indirizzo cambia a seconda della rete da cui si lavora, quindi non ha
-    un default: dalla VLAN del virtual studio va indicato per IP.
+    I record del KV che riguardano questo utente, eventualmente ristretti a un
+    team. Il confronto è case-insensitive e ignora gli spazi ai bordi: i valori
+    arrivano da un form pubblico e non sono normalizzati.
     """
-    global P4PORT, P4USER, P4PASSWD
-
-    P4PORT = input("Server Perforce (host:porta): ").strip()
-    if not P4PORT:
-        print("ERRORE: serve l'indirizzo del server.")
-        sys.exit(1)
-
-    P4USER = input("Utente Perforce: ").strip()
-    if not P4USER:
-        print("ERRORE: serve l'utente.")
-        sys.exit(1)
-
-    P4PASSWD = getpass.getpass(f"Password per {P4USER}: ")
-
-
-def p4_user_exists(username: str) -> bool:
-    return username in p4(f"users {username}").stdout
-
-
-def p4_user_groups(username: str) -> list[str]:
-    """Gruppi di cui l'utente è membro diretto."""
-    result = p4(f"groups {username}")
-    if result.returncode != 0:
-        return []
-    return [line.strip() for line in result.stdout.strip().split("\n") if line.strip()]
-
-
-def remove_user_from_group(username: str, group_name: str, dry_run: bool = False) -> bool:
-    """
-    Toglie l'utente dalla sezione Users: dello spec del gruppo.
-
-    Attenzione: se era l'ultimo membro, Perforce cancella il gruppo. Il depot e
-    la riga nelle protezioni restano, e vanno bene così — il gruppo si ricrea da
-    solo al prossimo provisioning sullo stesso team.
-    """
-    result = p4(f"group -o {group_name}")
-    if result.returncode != 0:
-        print(f"    [ERRORE] Gruppo '{group_name}' non leggibile: {result.stderr.strip()}")
-        return False
-
-    spec_lines = result.stdout.strip().split("\n")
-
-    new_spec_lines = []
-    in_users_section = False
-    found = False
-    remaining_users = 0
-
-    for line in spec_lines:
-        if line.startswith("Users:"):
-            in_users_section = True
-            new_spec_lines.append(line)
-            continue
-
-        if in_users_section:
-            if line.startswith("\t"):
-                if line.strip() == username:
-                    found = True
-                    continue  # la riga dell'utente non viene ricopiata
-                remaining_users += 1
-            else:
-                in_users_section = False
-
-        new_spec_lines.append(line)
-
-    if not found:
-        print(f"    [skip] '{username}' non è nel gruppo '{group_name}'")
-        return True
-
-    if dry_run:
-        extra = " (ultimo membro: il gruppo verrebbe cancellato)" if remaining_users == 0 else ""
-        print(f"    [dry-run] Toglierebbe '{username}' dal gruppo '{group_name}'{extra}")
-        return True
-
-    new_spec = "\n".join(new_spec_lines) + "\n"
-    result = p4("group -i", stdin_text=new_spec)
-    if result.returncode != 0:
-        print(f"    [ERRORE] '{username}' non rimosso da '{group_name}': {result.stderr.strip()}")
-        return False
-
-    print(f"    [rimosso] '{username}' ← gruppo '{group_name}'")
-    if remaining_users == 0:
-        print(f"    [nota] '{group_name}' era rimasto senza membri: Perforce l'ha cancellato")
-    return True
-
-
-def get_user_workspaces(username: str) -> list[str]:
-    result = p4(f"clients -u {username}")
-    workspaces = []
-    for line in result.stdout.strip().split("\n"):
-        if line.startswith("Client "):
-            workspaces.append(line.split(" ")[1])
-    return workspaces
-
-
-def get_pending_changes(username: str) -> list[str]:
-    """Changelist pending dell'utente. Bloccano la cancellazione dell'account."""
-    result = p4(f"changes -u {username} -s pending")
-    changes = []
-    for line in result.stdout.strip().split("\n"):
-        parts = line.split()
-        if len(parts) >= 2 and parts[0] == "Change":
-            changes.append(parts[1])
-    return changes
-
-
-def delete_pending_change(change: str, dry_run: bool = False) -> bool:
-    if dry_run:
-        return True
-    # I file aperti vanno rilasciati prima che la changelist si possa cancellare.
-    p4(f"revert -C {change} //...")
-    result = p4(f"change -d -f {change}")
-    return result.returncode == 0
-
-
-def delete_workspace(ws_name: str, dry_run: bool = False) -> bool:
-    if dry_run:
-        return True
-    p4(f"-c {ws_name} revert //...")
-    result = p4(f"client -d -f {ws_name}")
-    return result.returncode == 0
-
-
-def delete_p4_user(username: str, dry_run: bool = False) -> bool:
-    if dry_run:
-        return True
-    result = p4(f"user -d -f {username}")
-    return result.returncode == 0
+    matches = [
+        r for r in rows
+        if r.get("username", "").strip().lower() == username.strip().lower()
+    ]
+    if team:
+        matches = [
+            r for r in matches
+            if r.get("team", "").strip().lower() == team.strip().lower()
+        ]
+    return matches
 
 
 # ── Main ────────────────────────────────────────────────────────
@@ -227,7 +79,8 @@ def main():
         epilog="""
 Senza --team l'utente viene tolto da tutti i suoi team e l'account Perforce
 viene cancellato. Con --team viene tolto solo da quel gruppo: l'account resta
-in piedi se gli restano altri team.
+in piedi se gli restano altri team, ma i workspace e le changelist mappati sul
+depot di quel team vengono comunque rimossi.
 
 Sul KV il record passa a 'removed' e resta consultabile. Con --delete-record
 viene invece cancellato del tutto.
@@ -250,11 +103,12 @@ Esempi:
                         help="Non cancellare l'account Perforce, solo i gruppi")
     args = parser.parse_args()
 
-    username = args.user.strip()
-    team_filter = args.team.strip() if args.team else None
-
-    if username.lower() in ALWAYS_KEEP:
-        print(f"ERRORE: '{username}' è un account protetto, non si rimuove da qui.")
+    # I due valori finiscono in comandi p4: si validano prima di ogni altra cosa.
+    try:
+        username = p4c.check_p4_name(args.user, "username")
+        team_filter = p4c.check_p4_name(args.team, "team") if args.team else None
+    except P4Error as e:
+        print(f"ERRORE: {e}")
         sys.exit(1)
 
     # ── Dati dal Worker ──
@@ -267,10 +121,7 @@ Esempi:
         print(f"ERRORE: {e}")
         sys.exit(1)
 
-    matches = [r for r in rows if r.get("username", "").strip().lower() == username.lower()]
-    if team_filter:
-        matches = [r for r in matches if r.get("team", "").strip().lower() == team_filter.lower()]
-
+    matches = find_kv_matches(rows, username, team_filter)
     kv_teams = sorted({r.get("team", "").strip() for r in matches if r.get("team", "").strip()})
 
     print(f"Scaricati {len(rows)} record dal KV")
@@ -283,16 +134,17 @@ Esempi:
             print(f"  (nessun record per il team '{team_filter}')")
 
     # ── Server, utente, password Perforce ──
+    global P4
     print()
-    ask_p4_connection()
+    P4 = p4c.ask_p4_connection()
 
     # Non ci si può cancellare l'account da sotto i piedi.
-    if username.lower() == P4USER.lower():
+    if username.lower() == P4.user.lower():
         print(f"\nERRORE: '{username}' è l'account con cui sei connesso.")
         sys.exit(1)
 
-    print(f"Connessione a {P4PORT}...")
-    result = p4("info")
+    print(f"Connessione a {P4.port}...")
+    result = p4c.connect(P4)
     if result.returncode != 0:
         print("ERRORE: connessione al server Perforce fallita.")
         print(f"  Errore: {result.stderr.strip()}")
@@ -303,8 +155,8 @@ Esempi:
         print("\n*** DRY RUN — nessuna modifica verrà applicata ***")
 
     # ── Cosa c'è da rimuovere ──
-    exists_on_p4 = p4_user_exists(username)
-    p4_groups = p4_user_groups(username) if exists_on_p4 else []
+    exists_on_p4 = p4c.user_exists(P4, username)
+    p4_groups = p4c.user_groups(P4, username) if exists_on_p4 else []
 
     if team_filter:
         # Solo il gruppo indicato, e solo se l'utente ci sta davvero dentro.
@@ -313,11 +165,30 @@ Esempi:
         target_groups = list(p4_groups)
 
     leftover_groups = [g for g in p4_groups if g not in target_groups]
-    workspaces = get_user_workspaces(username) if exists_on_p4 else []
-    pending_changes = get_pending_changes(username) if exists_on_p4 else []
 
     # L'account si cancella solo se non gli resta accesso da nessuna parte.
     drop_account = exists_on_p4 and not args.keep_account and not leftover_groups
+
+    all_workspaces = p4c.user_workspaces(P4, username) if exists_on_p4 else []
+    all_changes = p4c.pending_changes(P4, username) if exists_on_p4 else []
+
+    if drop_account:
+        workspaces = all_workspaces
+        changes = all_changes
+    elif team_filter and exists_on_p4:
+        # Rimozione parziale: l'account resta, ma i workspace mappati sul depot
+        # di quel team vanno via lo stesso. Se non lo facciamo qui non li pulisce
+        # più nessuno: perforce_prune.py vede l'utente come "con accesso" grazie
+        # agli altri team e non lo tocca mai.
+        workspaces = [
+            ws for ws in all_workspaces
+            if team_filter in p4c.workspace_depots(P4, ws)
+        ]
+        targeted = set(workspaces)
+        changes = [c for c in all_changes if p4c.change_client(P4, c) in targeted]
+    else:
+        workspaces = []
+        changes = []
 
     print(f"\n{'═' * 60}")
     print(f"RIMOZIONE: {username}")
@@ -328,8 +199,8 @@ Esempi:
     else:
         print(f"  Gruppi da cui esce:   {', '.join(target_groups) if target_groups else '—'}")
         print(f"  Gruppi che restano:   {', '.join(leftover_groups) if leftover_groups else '—'}")
-        print(f"  Workspace:            {len(workspaces)}")
-        print(f"  Changelist pending:   {len(pending_changes)}")
+        print(f"  Workspace da pulire:  {len(workspaces)} di {len(all_workspaces)}")
+        print(f"  Changelist pending:   {len(changes)} di {len(all_changes)}")
         print(f"  Account Perforce:     {'CANCELLATO' if drop_account else 'mantenuto'}")
 
     if matches:
@@ -348,13 +219,14 @@ Esempi:
 
     # ── Conferma ──
     if not args.dry_run:
-        print(f"\n⚠️  Operazione irreversibile su Perforce e sul KV.")
+        print("\n⚠️  Operazione irreversibile su Perforce e sul KV.")
         confirm = input("Scrivi CONFIRM per procedere: ").strip()
         if confirm != "CONFIRM":
             print("Annullato.")
             return
 
     errors = 0
+    tag = "dry-run" if args.dry_run else None
 
     # ── Perforce ──
     if exists_on_p4:
@@ -362,28 +234,44 @@ Esempi:
         print("Perforce")
 
         for group in target_groups:
-            if not remove_user_from_group(username, group, args.dry_run):
+            ok, err, was_member, remaining = p4c.remove_user_from_group(
+                P4, username, group, args.dry_run
+            )
+            if not ok:
+                print(f"    [ERRORE] '{username}' non rimosso da '{group}': {err}")
+                errors += 1
+            elif not was_member:
+                print(f"    [skip] '{username}' non è nel gruppo '{group}'")
+            elif args.dry_run:
+                extra = " (ultimo membro: il gruppo verrebbe cancellato)" if remaining == 0 else ""
+                print(f"    [dry-run] Toglierebbe '{username}' dal gruppo '{group}'{extra}")
+            else:
+                print(f"    [rimosso] '{username}' ← gruppo '{group}'")
+                if remaining == 0:
+                    print(f"    [nota] '{group}' era rimasto senza membri: Perforce l'ha cancellato")
+
+        for change in changes:
+            ok, err = p4c.delete_pending_change(P4, change, args.dry_run)
+            if ok:
+                print(f"    [{tag or 'cancellata'}] Changelist {change}")
+            else:
+                print(f"    [ERRORE] Changelist {change} non cancellata: {err}")
+                errors += 1
+
+        for ws in workspaces:
+            ok, err = p4c.delete_workspace(P4, ws, args.dry_run)
+            if ok:
+                print(f"    [{tag or 'cancellato'}] Workspace '{ws}'")
+            else:
+                print(f"    [ERRORE] Workspace '{ws}' non cancellato: {err}")
                 errors += 1
 
         if drop_account:
-            for change in pending_changes:
-                if delete_pending_change(change, args.dry_run):
-                    print(f"    [{'dry-run' if args.dry_run else 'cancellata'}] Changelist {change}")
-                else:
-                    print(f"    [ERRORE] Changelist {change} non cancellata")
-                    errors += 1
-
-            for ws in workspaces:
-                if delete_workspace(ws, args.dry_run):
-                    print(f"    [{'dry-run' if args.dry_run else 'cancellato'}] Workspace '{ws}'")
-                else:
-                    print(f"    [ERRORE] Workspace '{ws}' non cancellato")
-                    errors += 1
-
-            if delete_p4_user(username, args.dry_run):
-                print(f"    [{'dry-run' if args.dry_run else 'cancellato'}] Utente '{username}'")
+            ok, err = p4c.delete_user(P4, username, args.dry_run)
+            if ok:
+                print(f"    [{tag or 'cancellato'}] Utente '{username}'")
             else:
-                print(f"    [ERRORE] Utente '{username}' non cancellato")
+                print(f"    [ERRORE] Utente '{username}' non cancellato: {err}")
                 errors += 1
 
     # ── KV ──
@@ -421,6 +309,16 @@ Esempi:
         print(f"COMPLETATO CON {errors} ERRORE/I — rileggi l'output sopra")
     else:
         print("COMPLETATO")
+
+    # ── Cosa resta da fare a mano ──
+    residual_teams = kv_teams or target_groups
+    print(f"\n{'─' * 50}")
+    print("Da rimuovere a mano, lo script non tocca Discord:")
+    if residual_teams:
+        for team in residual_teams:
+            print(f"    ruolo e canale del team '{team}' — e '{username}' dal server")
+    else:
+        print(f"    ruolo, canale e presenza di '{username}' sul server Discord")
 
     if args.dry_run:
         print("\n*** Era un dry run. Rilancia senza --dry-run per applicare. ***")

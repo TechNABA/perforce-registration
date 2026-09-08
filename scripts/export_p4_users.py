@@ -25,9 +25,6 @@ Uso:
 
 import argparse
 import csv
-import getpass
-import os
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,6 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import naba_store
+import p4_common as p4c
 from naba_store import FIELDS, StoreError
 
 
@@ -44,65 +42,19 @@ from naba_store import FIELDS, StoreError
 # Server, utente e password vengono chiesti a ogni esecuzione: nel codice non
 # resta né l'indirizzo del server né un account, e la repo è pubblica. Serve
 # anche perché dalla VLAN del virtual studio il server si raggiunge solo per IP.
-P4PORT = ""
-P4USER = ""
-P4PASSWD = ""
+#
+# La connessione viene creata in main() e usata dalle funzioni qui sotto.
+P4 = None
 
-# Utenti esclusi dall'export (account di servizio, admin, ecc.)
-# L'utente con cui ci si connette viene aggiunto a runtime.
-EXCLUDE_USERS = {
-    "villal",       # account admin — aggiungerne altri qui se serve
-}
+# Utenti esclusi dall'export. Non ce ne sono di scritti qui: l'unico che va
+# sempre escluso è l'admin con cui ci si connette, e lo si conosce a runtime.
+EXCLUDE_USERS = set()
 # ══════════════════════════════════════════════════════════════
-
-
-def get_p4_env() -> dict:
-    env = os.environ.copy()
-    env["P4PORT"] = P4PORT
-    env["P4USER"] = P4USER
-    if P4PASSWD:
-        env["P4PASSWD"] = P4PASSWD
-    return env
-
-
-def p4(cmd: str, stdin_text: str = None) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        f"p4 {cmd}",
-        shell=True,
-        capture_output=True,
-        text=True,
-        input=stdin_text,
-        env=get_p4_env(),
-    )
-
-
-def ask_p4_connection() -> None:
-    """
-    Chiede server, utente e password, in quest'ordine, a ogni esecuzione.
-    L'indirizzo cambia a seconda della rete da cui si lavora, quindi non ha
-    un default: dalla VLAN del virtual studio va indicato per IP.
-    """
-    global P4PORT, P4USER, P4PASSWD
-
-    P4PORT = input("Server Perforce (host:porta): ").strip()
-    if not P4PORT:
-        print("ERRORE: serve l'indirizzo del server.")
-        sys.exit(1)
-
-    P4USER = input("Utente Perforce: ").strip()
-    if not P4USER:
-        print("ERRORE: serve l'utente.")
-        sys.exit(1)
-
-    P4PASSWD = getpass.getpass(f"Password per {P4USER}: ")
-
-    # L'admin connesso non finisce mai nell'export verso il KV.
-    EXCLUDE_USERS.add(P4USER)
 
 
 def get_all_users() -> list[dict]:
     """Legge tutti gli utenti con p4 users e il loro spec completo."""
-    result = p4("users")
+    result = P4.run("users")
     if result.returncode != 0:
         print(f"ERRORE: p4 users fallito: {result.stderr.strip()}")
         sys.exit(1)
@@ -118,7 +70,7 @@ def get_all_users() -> list[dict]:
             continue
 
         # Lo spec completo è più affidabile del parsing della riga
-        spec_result = p4(f"user -o {username}")
+        spec_result = P4.run("user", "-o", username)
         if spec_result.returncode != 0:
             continue
 
@@ -137,7 +89,7 @@ def get_all_users() -> list[dict]:
 
 def get_user_groups() -> dict[str, list[str]]:
     """Legge tutti i gruppi e ritorna la mappa username → lista di gruppi."""
-    result = p4("groups")
+    result = P4.run("groups")
     if result.returncode != 0:
         print(f"ATTENZIONE: p4 groups fallito: {result.stderr.strip()}")
         return {}
@@ -149,7 +101,7 @@ def get_user_groups() -> dict[str, list[str]]:
         if not group_name:
             continue
 
-        spec_result = p4(f"group -o {group_name}")
+        spec_result = P4.run("group", "-o", group_name)
         if spec_result.returncode != 0:
             continue
 
@@ -183,10 +135,14 @@ def main():
     args = parser.parse_args()
 
     # Server, utente, password Perforce
-    ask_p4_connection()
+    global P4
+    P4 = p4c.ask_p4_connection()
 
-    print(f"\nConnessione a {P4PORT}...")
-    result = p4("info")
+    # L'admin connesso non finisce mai nell'export verso il KV.
+    EXCLUDE_USERS.add(P4.user)
+
+    print(f"\nConnessione a {P4.port}...")
+    result = p4c.connect(P4)
     if result.returncode != 0:
         print(f"ERRORE: connessione fallita: {result.stderr.strip()}")
         sys.exit(1)
