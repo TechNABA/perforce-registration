@@ -12,6 +12,7 @@ silenzio: la costruzione dei comandi p4, la riscrittura degli spec dei gruppi,
 e le guardie che impediscono di cancellare l'account con cui sei connesso.
 """
 
+import io
 import subprocess
 import sys
 import unittest
@@ -22,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 import p4_common as p4c
 import perforce_cleanup
+import perforce_prune
 
 
 def completed(returncode=0, stdout="", stderr=""):
@@ -336,6 +338,43 @@ class TestKvMatches(unittest.TestCase):
         self.assertEqual(perforce_cleanup.find_kv_matches(ROWS, "mario_rossi", "Gamma"), [])
 
 
+# ── select_team_workspaces (contratto 2a) ────────────────────────
+class TestSelectTeamWorkspaces(unittest.TestCase):
+    def test_workspace_con_solo_il_depot_del_team_e_targeted(self):
+        spec = (
+            "Client:\tws1\n"
+            "View:\n"
+            "\t//Alfa/... //ws1/Alfa/...\n"
+        )
+        client = FakeP4([completed(stdout=spec)])
+        targeted, shared = perforce_cleanup.select_team_workspaces(client, ["ws1"], "alfa")
+        self.assertEqual(targeted, ["ws1"])
+        self.assertEqual(shared, [])
+
+    def test_workspace_con_anche_un_altro_depot_e_shared_non_targeted(self):
+        spec = (
+            "Client:\tws2\n"
+            "View:\n"
+            "\t//Alfa/... //ws2/Alfa/...\n"
+            "\t//Beta/... //ws2/Beta/...\n"
+        )
+        client = FakeP4([completed(stdout=spec)])
+        targeted, shared = perforce_cleanup.select_team_workspaces(client, ["ws2"], "alfa")
+        self.assertEqual(targeted, [])
+        self.assertEqual(shared, ["ws2"])
+
+    def test_workspace_senza_il_depot_del_team_non_compare_in_nessuna_lista(self):
+        spec = (
+            "Client:\tws3\n"
+            "View:\n"
+            "\t//Beta/... //ws3/Beta/...\n"
+        )
+        client = FakeP4([completed(stdout=spec)])
+        targeted, shared = perforce_cleanup.select_team_workspaces(client, ["ws3"], "alfa")
+        self.assertEqual(targeted, [])
+        self.assertEqual(shared, [])
+
+
 # ── purge() non si autoconferma ─────────────────────────────────
 class TestPurgeConfirm(unittest.TestCase):
     def test_purge_senza_conferma_esplicita_non_parte(self):
@@ -344,6 +383,53 @@ class TestPurgeConfirm(unittest.TestCase):
             with self.assertRaises(naba_store.StoreError):
                 naba_store.purge("token", "")
         req.assert_not_called()
+
+
+# ── main() non cancella l'account dopo un errore precedente (2b/2c) ──
+class TestCleanupNonCancellaUtenteSeUnErroreCePrecedente(unittest.TestCase):
+    def test_delete_user_non_chiamato_se_delete_workspace_e_fallito(self):
+        fake = FakeP4()
+        delete_user_mock = mock.MagicMock(return_value=(True, ""))
+        with mock.patch.object(sys, "argv", ["perforce_cleanup.py", "--user", "mario_rossi"]), \
+             mock.patch("builtins.input", return_value="CONFIRM"), \
+             mock.patch("sys.stdout", new_callable=io.StringIO), \
+             mock.patch.object(perforce_cleanup.naba_store, "worker_url", return_value="https://worker.test"), \
+             mock.patch.object(perforce_cleanup.naba_store, "get_admin_token", return_value="tok"), \
+             mock.patch.object(perforce_cleanup.naba_store, "fetch_users", return_value=[]), \
+             mock.patch.object(p4c, "ask_p4_connection", return_value=fake), \
+             mock.patch.object(p4c, "connect", return_value=completed()), \
+             mock.patch.object(p4c, "user_exists", return_value=True), \
+             mock.patch.object(p4c, "user_groups", return_value=[]), \
+             mock.patch.object(p4c, "user_workspaces", return_value=["ws1"]), \
+             mock.patch.object(p4c, "pending_changes", return_value=[]), \
+             mock.patch.object(p4c, "delete_workspace", return_value=(False, "boom")), \
+             mock.patch.object(p4c, "delete_user", delete_user_mock):
+            perforce_cleanup.main()
+
+        delete_user_mock.assert_not_called()
+
+
+class TestPruneNonCancellaLutenteOrfanoSeUnErroreCePrecedente(unittest.TestCase):
+    def test_delete_user_non_chiamato_se_delete_workspace_e_fallito(self):
+        fake = FakeP4()
+        delete_user_mock = mock.MagicMock(return_value=(True, ""))
+        with mock.patch.object(sys, "argv", ["perforce_prune.py"]), \
+             mock.patch("builtins.input", return_value="CONFIRM"), \
+             mock.patch("sys.stdout", new_callable=io.StringIO), \
+             mock.patch.object(p4c, "ask_p4_connection", return_value=fake), \
+             mock.patch.object(p4c, "connect", return_value=completed()), \
+             mock.patch.object(perforce_prune, "get_all_users", return_value=["orfano"]), \
+             mock.patch.object(perforce_prune, "get_users_in_groups", return_value=set()), \
+             mock.patch.object(perforce_prune, "get_users_in_protections", return_value=set()), \
+             mock.patch.object(perforce_prune, "get_groups_in_protections", return_value=set()), \
+             mock.patch.object(perforce_prune, "get_all_groups", return_value=[]), \
+             mock.patch.object(p4c, "pending_changes", return_value=[]), \
+             mock.patch.object(p4c, "user_workspaces", return_value=["ws1"]), \
+             mock.patch.object(p4c, "delete_workspace", return_value=(False, "boom")), \
+             mock.patch.object(p4c, "delete_user", delete_user_mock):
+            perforce_prune.main()
+
+        delete_user_mock.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -53,6 +53,26 @@ P4 = None
 # ══════════════════════════════════════════════════════════════
 
 
+def select_team_workspaces(client, workspaces: list[str], team_filter: str) -> tuple[list[str], list[str]]:
+    """
+    Divide i workspace tra quelli mappati SOLO sul depot del team (da cancellare)
+    e quelli che mappano anche altri depot (condivisi: si segnalano, non si toccano).
+    Confronto case-insensitive sui nomi dei depot.
+    """
+    team_lower = team_filter.lower()
+    targeted = []
+    shared = []
+    for ws in workspaces:
+        depots = {d.lower() for d in p4c.workspace_depots(client, ws)}
+        if not depots:
+            continue
+        if depots == {team_lower}:
+            targeted.append(ws)
+        elif team_lower in depots:
+            shared.append(ws)
+    return targeted, shared
+
+
 def find_kv_matches(rows: list[dict], username: str, team: str = None) -> list[dict]:
     """
     I record del KV che riguardano questo utente, eventualmente ristretti a un
@@ -172,18 +192,18 @@ Esempi:
     all_workspaces = p4c.user_workspaces(P4, username) if exists_on_p4 else []
     all_changes = p4c.pending_changes(P4, username) if exists_on_p4 else []
 
+    shared_workspaces = []
     if drop_account:
         workspaces = all_workspaces
         changes = all_changes
     elif team_filter and exists_on_p4:
-        # Rimozione parziale: l'account resta, ma i workspace mappati sul depot
-        # di quel team vanno via lo stesso. Se non lo facciamo qui non li pulisce
-        # più nessuno: perforce_prune.py vede l'utente come "con accesso" grazie
-        # agli altri team e non lo tocca mai.
-        workspaces = [
-            ws for ws in all_workspaces
-            if team_filter in p4c.workspace_depots(P4, ws)
-        ]
+        # Rimozione parziale: l'account resta, ma i workspace mappati SOLO sul
+        # depot di quel team vanno via lo stesso. Se non lo facciamo qui non li
+        # pulisce più nessuno: perforce_prune.py vede l'utente come "con accesso"
+        # grazie agli altri team e non lo tocca mai. I workspace condivisi con
+        # altri team, invece, restano: cancellarli toglierebbe l'accesso anche a
+        # chi non c'entra con questa rimozione.
+        workspaces, shared_workspaces = select_team_workspaces(P4, all_workspaces, team_filter)
         targeted = set(workspaces)
         changes = [c for c in all_changes if p4c.change_client(P4, c) in targeted]
     else:
@@ -200,6 +220,8 @@ Esempi:
         print(f"  Gruppi da cui esce:   {', '.join(target_groups) if target_groups else '—'}")
         print(f"  Gruppi che restano:   {', '.join(leftover_groups) if leftover_groups else '—'}")
         print(f"  Workspace da pulire:  {len(workspaces)} di {len(all_workspaces)}")
+        if shared_workspaces:
+            print(f"  Workspace condivisi:  {', '.join(shared_workspaces)} (mappano anche altri depot, non toccati)")
         print(f"  Changelist pending:   {len(changes)} di {len(all_changes)}")
         print(f"  Account Perforce:     {'CANCELLATO' if drop_account else 'mantenuto'}")
 
@@ -267,12 +289,18 @@ Esempi:
                 errors += 1
 
         if drop_account:
-            ok, err = p4c.delete_user(P4, username, args.dry_run)
-            if ok:
-                print(f"    [{tag or 'cancellato'}] Utente '{username}'")
+            # Con `user -d -f` l'account sparisce ma i suoi workspace/changelist
+            # restano se una cancellazione qui sopra è fallita: perforce_prune.py
+            # itera `p4 users`, quindi quell'utente non c'è più e non li rivede.
+            if errors:
+                print(f"    [skip] Utente '{username}' non cancellato: {errors} oggetto/i sopra non rimossi — sistemali e rilancia")
             else:
-                print(f"    [ERRORE] Utente '{username}' non cancellato: {err}")
-                errors += 1
+                ok, err = p4c.delete_user(P4, username, args.dry_run)
+                if ok:
+                    print(f"    [{tag or 'cancellato'}] Utente '{username}'")
+                else:
+                    print(f"    [ERRORE] Utente '{username}' non cancellato: {err}")
+                    errors += 1
 
     # ── KV ──
     if matches and not args.dry_run:
