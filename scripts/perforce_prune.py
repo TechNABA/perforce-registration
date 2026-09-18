@@ -210,6 +210,8 @@ Examples:
         print(f"\n{'─' * 40}")
         print(f"Removing: {user}")
 
+        user_errors = 0
+
         # Pending changelists first: they keep files open and block the account
         for change in p4c.pending_changes(P4, user):
             ok, err = p4c.delete_pending_change(P4, change, args.dry_run)
@@ -218,6 +220,7 @@ Examples:
             else:
                 print(f"  [ERROR] Could not delete changelist {change}: {err}")
                 errors += 1
+                user_errors += 1
 
         # Then workspaces
         for ws in p4c.user_workspaces(P4, user):
@@ -227,6 +230,14 @@ Examples:
             else:
                 print(f"  [ERROR] Could not delete workspace '{ws}': {err}")
                 errors += 1
+                user_errors += 1
+
+        # `user -d -f` removes the account but leaves any undeleted workspace or
+        # changelist behind: this script iterates `p4 users`, so once the account
+        # is gone the orphan is never seen again.
+        if user_errors:
+            print(f"  [kept] User '{user}' kept: {user_errors} object(s) above could not be removed")
+            continue
 
         # And finally the account
         ok, err = p4c.delete_user(P4, user, args.dry_run)

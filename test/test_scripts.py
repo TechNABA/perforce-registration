@@ -12,6 +12,7 @@ silenzio: la costruzione dei comandi p4, la riscrittura degli spec dei gruppi,
 e le guardie che impediscono di cancellare l'account con cui sei connesso.
 """
 
+import io
 import subprocess
 import sys
 import unittest
@@ -20,8 +21,11 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+import export_p4_users
 import p4_common as p4c
 import perforce_cleanup
+import perforce_prune
+import perforce_provision
 
 
 def completed(returncode=0, stdout="", stderr=""):
@@ -56,6 +60,16 @@ class TestNameValidation(unittest.TestCase):
         for name in ["Alfa & calc", "a;rm -rf /", "a|b", "a`id`", "a$(id)",
                      "a b", "a\nb", "a\tb", "", "   ", "../etc"]:
             self.assertFalse(p4c.valid_p4_name(name), repr(name))
+
+    def test_rifiuta_i_nomi_che_iniziano_con_un_carattere_non_alfanumerico(self):
+        # Il primo carattere deve essere lettera o cifra: "-D" sembrerebbe
+        # un'opzione a p4, ".hidden" e "_x" non sono username che il form genera.
+        for name in ["-D", "-", ".hidden", "_x"]:
+            self.assertFalse(p4c.valid_p4_name(name), repr(name))
+
+    def test_check_p4_name_solleva_se_il_nome_inizia_con_un_trattino(self):
+        with self.assertRaises(p4c.P4Error):
+            p4c.check_p4_name("-D", "team")
 
     def test_check_p4_name_pulisce_gli_spazi_ai_bordi(self):
         self.assertEqual(p4c.check_p4_name("  mario_rossi  ", "username"), "mario_rossi")
@@ -169,6 +183,24 @@ class TestViewDepots(unittest.TestCase):
     def test_senza_view_nessun_depot(self):
         self.assertEqual(p4c.parse_view_depots("Client:\tws\n"), set())
 
+    def test_mapping_ditto_conta_come_mapping_del_depot(self):
+        # "&//Depot/..." è la forma ditto della View: mappa Depot esattamente
+        # come "-//" e "+//".
+        spec = (
+            "Client:\tws_mario\n"
+            "View:\n"
+            "\t&//Alfa/... //ws_mario/Alfa/...\n"
+        )
+        self.assertEqual(p4c.parse_view_depots(spec), {"Alfa"})
+
+    def test_mapping_ditto_tra_virgolette_conta_come_mapping_del_depot(self):
+        spec = (
+            "Client:\tws_mario\n"
+            "View:\n"
+            "\t\"&//Alfa/...\" \"//ws_mario/Alfa/...\"\n"
+        )
+        self.assertEqual(p4c.parse_view_depots(spec), {"Alfa"})
+
 
 # ── Operazioni distruttive ──────────────────────────────────────
 class TestDestructive(unittest.TestCase):
@@ -191,18 +223,57 @@ class TestDestructive(unittest.TestCase):
         self.assertEqual(len(client.calls), 1)
 
     def test_changelist_non_cancellata_se_il_revert_fallisce(self):
-        client = FakeP4([completed(returncode=1, stderr="in uso")])
+        # Trova il workspace giusto (change -o), ma il revert in quel
+        # workspace fallisce: niente change -d -f.
+        change_spec = "Change:\t42\nClient:\tws_mario\nStatus:\tpending\n"
+        client = FakeP4([completed(stdout=change_spec),
+                         completed(returncode=1, stderr="boom")])
         ok, err = p4c.delete_pending_change(client, "42")
-        self.assertFalse(ok)
-        self.assertEqual(len(client.calls), 1)
+        self.assertEqual((ok, err), (False, "revert della changelist 42 fallito: boom"))
+        self.assertEqual(len(client.calls), 2)
+        self.assertEqual(client.calls[1][0], ("revert", "-C", "ws_mario", "-c", "42", "//..."))
 
     def test_workspace_cancellato_dopo_un_revert_riuscito(self):
+        # Forma admin: -C è il client, non "-c client revert" (quella
+        # richiede che l'operatore SIA quel client, non lo cancella per altri).
         client = FakeP4([completed(), completed()])
         ok, err = p4c.delete_workspace(client, "ws_mario")
         self.assertTrue(ok)
         self.assertEqual(err, "")
-        self.assertEqual(client.calls[0][0], ("-c", "ws_mario", "revert", "//..."))
+        self.assertEqual(client.calls[0][0], ("revert", "-C", "ws_mario", "//..."))
         self.assertEqual(client.calls[1][0], ("client", "-d", "-f", "ws_mario"))
+
+    def test_changelist_riverte_nel_workspace_della_changelist_e_poi_la_cancella(self):
+        # delete_pending_change deve prima ricavare il workspace con
+        # change_client (change -o), poi revertare in forma admin (-C <ws> -c
+        # <change>), non trattare `change` come se fosse un nome di workspace.
+        change_spec = "Change:\t42\nClient:\tws_mario\nStatus:\tpending\n"
+        client = FakeP4([completed(stdout=change_spec), completed(), completed()])
+        ok, err = p4c.delete_pending_change(client, "42")
+        self.assertTrue(ok)
+        self.assertEqual(err, "")
+        self.assertEqual(client.calls[0][0], ("change", "-o", "42"))
+        self.assertEqual(client.calls[1][0], ("revert", "-C", "ws_mario", "-c", "42", "//..."))
+        self.assertEqual(client.calls[2][0], ("change", "-d", "-f", "42"))
+
+    def test_changelist_senza_workspace_non_chiama_revert(self):
+        # Se change -o non riporta un Client:, non c'è un client per il -C:
+        # niente revert, niente change -d.
+        client = FakeP4([completed(stdout="Change:\t42\nStatus:\tpending\n")])
+        ok, err = p4c.delete_pending_change(client, "42")
+        self.assertFalse(ok)
+        self.assertIn("workspace non trovato", err)
+        self.assertEqual(len(client.calls), 1)
+
+    def test_changelist_non_cancellata_se_change_d_fallisce_dopo_un_revert_riuscito(self):
+        # Revert riuscito, ma "change -d -f" fallisce (es. bloccata da un lock):
+        # l'errore del server va propagato così com'è, non inghiottito.
+        change_spec = "Change:\t42\nClient:\tws_mario\nStatus:\tpending\n"
+        client = FakeP4([completed(stdout=change_spec), completed(),
+                         completed(returncode=1, stderr="locked")])
+        ok, err = p4c.delete_pending_change(client, "42")
+        self.assertEqual((ok, err), (False, "locked"))
+        self.assertEqual(len(client.calls), 3)
 
     def test_remove_user_from_group_scrive_lo_spec_ripulito(self):
         client = FakeP4([completed(stdout=GROUP_SPEC), completed()])
@@ -279,6 +350,55 @@ class TestKvMatches(unittest.TestCase):
         self.assertEqual(perforce_cleanup.find_kv_matches(ROWS, "mario_rossi", "Gamma"), [])
 
 
+# ── select_team_workspaces (contratto 2a) ────────────────────────
+class TestSelectTeamWorkspaces(unittest.TestCase):
+    def test_workspace_con_solo_il_depot_del_team_e_targeted(self):
+        spec = (
+            "Client:\tws1\n"
+            "View:\n"
+            "\t//Alfa/... //ws1/Alfa/...\n"
+        )
+        client = FakeP4([completed(stdout=spec)])
+        targeted, shared = perforce_cleanup.select_team_workspaces(client, ["ws1"], "alfa")
+        self.assertEqual(targeted, ["ws1"])
+        self.assertEqual(shared, [])
+
+    def test_workspace_con_anche_un_altro_depot_e_shared_non_targeted(self):
+        spec = (
+            "Client:\tws2\n"
+            "View:\n"
+            "\t//Alfa/... //ws2/Alfa/...\n"
+            "\t//Beta/... //ws2/Beta/...\n"
+        )
+        client = FakeP4([completed(stdout=spec)])
+        targeted, shared = perforce_cleanup.select_team_workspaces(client, ["ws2"], "alfa")
+        self.assertEqual(targeted, [])
+        self.assertEqual(shared, ["ws2"])
+
+    def test_workspace_senza_il_depot_del_team_non_compare_in_nessuna_lista(self):
+        spec = (
+            "Client:\tws3\n"
+            "View:\n"
+            "\t//Beta/... //ws3/Beta/...\n"
+        )
+        client = FakeP4([completed(stdout=spec)])
+        targeted, shared = perforce_cleanup.select_team_workspaces(client, ["ws3"], "alfa")
+        self.assertEqual(targeted, [])
+        self.assertEqual(shared, [])
+
+    def test_workspace_con_view_vuota_non_compare_in_nessuna_lista(self):
+        # View: presente ma senza righe sotto: nessun depot mappato, non è né
+        # targeted né shared.
+        spec = (
+            "Client:\tws4\n"
+            "View:\n"
+        )
+        client = FakeP4([completed(stdout=spec)])
+        targeted, shared = perforce_cleanup.select_team_workspaces(client, ["ws4"], "alfa")
+        self.assertEqual(targeted, [])
+        self.assertEqual(shared, [])
+
+
 # ── purge() non si autoconferma ─────────────────────────────────
 class TestPurgeConfirm(unittest.TestCase):
     def test_purge_senza_conferma_esplicita_non_parte(self):
@@ -287,6 +407,164 @@ class TestPurgeConfirm(unittest.TestCase):
             with self.assertRaises(naba_store.StoreError):
                 naba_store.purge("token", "")
         req.assert_not_called()
+
+
+# ── main() non cancella l'account dopo un errore precedente (2b/2c) ──
+class TestCleanupNonCancellaUtenteSeUnErroreCePrecedente(unittest.TestCase):
+    def test_delete_user_non_chiamato_se_delete_workspace_e_fallito(self):
+        fake = FakeP4()
+        delete_user_mock = mock.MagicMock(return_value=(True, ""))
+        with mock.patch.object(sys, "argv", ["perforce_cleanup.py", "--user", "mario_rossi"]), \
+             mock.patch("builtins.input", return_value="CONFIRM"), \
+             mock.patch("sys.stdout", new_callable=io.StringIO) as out, \
+             mock.patch.object(perforce_cleanup.naba_store, "worker_url", return_value="https://worker.test"), \
+             mock.patch.object(perforce_cleanup.naba_store, "get_admin_token", return_value="tok"), \
+             mock.patch.object(perforce_cleanup.naba_store, "fetch_users", return_value=[]), \
+             mock.patch.object(p4c, "ask_p4_connection", return_value=fake), \
+             mock.patch.object(p4c, "connect", return_value=completed()), \
+             mock.patch.object(p4c, "user_exists", return_value=True), \
+             mock.patch.object(p4c, "user_groups", return_value=[]), \
+             mock.patch.object(p4c, "user_workspaces", return_value=["ws1"]), \
+             mock.patch.object(p4c, "pending_changes", return_value=[]), \
+             mock.patch.object(p4c, "delete_workspace", return_value=(False, "boom")), \
+             mock.patch.object(p4c, "delete_user", delete_user_mock):
+            perforce_cleanup.main()
+
+        delete_user_mock.assert_not_called()
+        # 2b: l'utente trattenuto va detto in chiaro nell'output, non solo
+        # inferito dal fatto che delete_user non è stato chiamato.
+        self.assertIn(
+            "[trattenuto] Utente 'mario_rossi' non cancellato: 1 oggetto/i sopra non rimossi",
+            out.getvalue(),
+        )
+
+
+class TestPruneNonCancellaLutenteOrfanoSeUnErroreCePrecedente(unittest.TestCase):
+    def test_delete_user_non_chiamato_se_delete_workspace_e_fallito(self):
+        fake = FakeP4()
+        delete_user_mock = mock.MagicMock(return_value=(True, ""))
+        with mock.patch.object(sys, "argv", ["perforce_prune.py"]), \
+             mock.patch("builtins.input", return_value="CONFIRM"), \
+             mock.patch("sys.stdout", new_callable=io.StringIO), \
+             mock.patch.object(p4c, "ask_p4_connection", return_value=fake), \
+             mock.patch.object(p4c, "connect", return_value=completed()), \
+             mock.patch.object(perforce_prune, "get_all_users", return_value=["orfano"]), \
+             mock.patch.object(perforce_prune, "get_users_in_groups", return_value=set()), \
+             mock.patch.object(perforce_prune, "get_users_in_protections", return_value=set()), \
+             mock.patch.object(perforce_prune, "get_groups_in_protections", return_value=set()), \
+             mock.patch.object(perforce_prune, "get_all_groups", return_value=[]), \
+             mock.patch.object(p4c, "pending_changes", return_value=[]), \
+             mock.patch.object(p4c, "user_workspaces", return_value=["ws1"]), \
+             mock.patch.object(p4c, "delete_workspace", return_value=(False, "boom")), \
+             mock.patch.object(p4c, "delete_user", delete_user_mock):
+            perforce_prune.main()
+
+        delete_user_mock.assert_not_called()
+
+    def test_orfano_pulito_viene_cancellato_anche_se_un_altro_orfano_fallisce(self):
+        # Due orfani: "fallito" (il suo workspace non si cancella) e "pulito"
+        # (va liscio). prune deve trattenere solo il primo e completare il
+        # secondo — un errore su un utente non deve bloccare gli altri.
+        fake = FakeP4()
+        delete_user_mock = mock.MagicMock(return_value=(True, ""))
+        delete_workspace_mock = mock.MagicMock(side_effect=[(False, "boom"), (True, "")])
+        with mock.patch.object(sys, "argv", ["perforce_prune.py"]), \
+             mock.patch("builtins.input", return_value="CONFIRM"), \
+             mock.patch("sys.stdout", new_callable=io.StringIO) as out, \
+             mock.patch.object(p4c, "ask_p4_connection", return_value=fake), \
+             mock.patch.object(p4c, "connect", return_value=completed()), \
+             mock.patch.object(perforce_prune, "get_all_users", return_value=["fallito", "pulito"]), \
+             mock.patch.object(perforce_prune, "get_users_in_groups", return_value=set()), \
+             mock.patch.object(perforce_prune, "get_users_in_protections", return_value=set()), \
+             mock.patch.object(perforce_prune, "get_groups_in_protections", return_value=set()), \
+             mock.patch.object(perforce_prune, "get_all_groups", return_value=[]), \
+             mock.patch.object(p4c, "pending_changes", return_value=[]), \
+             mock.patch.object(p4c, "user_workspaces", return_value=["ws1"]), \
+             mock.patch.object(p4c, "delete_workspace", delete_workspace_mock), \
+             mock.patch.object(p4c, "delete_user", delete_user_mock):
+            perforce_prune.main()
+
+        delete_user_mock.assert_called_once_with(fake, "pulito", False)
+        self.assertIn(
+            "[kept] User 'fallito' kept: 1 object(s) above could not be removed",
+            out.getvalue(),
+        )
+
+
+# ── get_all_users() esclude account admin/servizio (contratto 3c) ──
+class TestExportPUsersEscludeAccount(unittest.TestCase):
+    def tearDown(self):
+        export_p4_users.P4 = None
+
+    def test_utente_escluso_per_nome_esatto_non_viene_letto_ne_incluso(self):
+        export_p4_users.P4 = FakeP4([
+            completed(stdout=(
+                "villal <v@x> (V) accessed 2026/01/01\n"
+                "mario_rossi <m@x> (M) accessed 2026/01/01\n"
+            )),
+            completed(stdout="FullName:\tMario Rossi\nEmail:\tm@x\n"),
+        ])
+        with mock.patch.object(export_p4_users, "EXCLUDE_USERS", {"villal"}):
+            users = export_p4_users.get_all_users()
+
+        self.assertEqual([u["username"] for u in users], ["mario_rossi"])
+        self.assertNotIn(("user", "-o", "villal"),
+                         [c[0] for c in export_p4_users.P4.calls])
+
+    def test_esclusione_ignora_maiuscole_e_minuscole(self):
+        # EXCLUDE_USERS contiene nomi lowercase (come impone il contratto);
+        # l'utente arriva da "p4 users" con la capitalizzazione originale.
+        export_p4_users.P4 = FakeP4([
+            completed(stdout="VillaL <v@x> (V) accessed 2026/01/01\n"),
+        ])
+        with mock.patch.object(export_p4_users, "EXCLUDE_USERS", {"villal"}):
+            users = export_p4_users.get_all_users()
+
+        self.assertEqual(users, [])
+        self.assertNotIn(("user", "-o", "VillaL"),
+                         [c[0] for c in export_p4_users.P4.calls])
+
+
+# ── get_user_groups() esclude account admin/servizio (contratto 3c) ──
+class TestExportPUserGroupsEscludeAccount(unittest.TestCase):
+    def tearDown(self):
+        export_p4_users.P4 = None
+
+    def test_membro_escluso_case_insensitive_non_compare_ma_gli_altri_si(self):
+        group_spec = (
+            "Group:\tAlfa\n"
+            "Users:\n"
+            "\tVillaL\n"
+            "\tmario_rossi\n"
+        )
+        export_p4_users.P4 = FakeP4([
+            completed(stdout="Alfa\n"),
+            completed(stdout=group_spec),
+        ])
+        with mock.patch.object(export_p4_users, "EXCLUDE_USERS", {"villal"}):
+            groups = export_p4_users.get_user_groups()
+
+        self.assertNotIn("VillaL", groups)
+        self.assertNotIn("villal", groups)
+        self.assertEqual(groups, {"mario_rossi": ["Alfa"]})
+
+
+# ── ask_initial_password() con conferma (contratto 3d) ──────────
+class TestAskInitialPassword(unittest.TestCase):
+    def test_invio_vuoto_non_imposta_la_password_e_non_chiede_conferma(self):
+        with mock.patch("perforce_provision.getpass.getpass", side_effect=[""]) as gp:
+            self.assertIsNone(perforce_provision.ask_initial_password())
+        self.assertEqual(gp.call_count, 1)
+
+    def test_due_password_uguali_vengono_accettate(self):
+        with mock.patch("perforce_provision.getpass.getpass", side_effect=["segreta", "segreta"]):
+            self.assertEqual(perforce_provision.ask_initial_password(), "segreta")
+
+    def test_due_password_diverse_fermano_lo_script(self):
+        with mock.patch("perforce_provision.getpass.getpass", side_effect=["segreta", "sbagliata"]):
+            with self.assertRaises(SystemExit) as ctx:
+                perforce_provision.ask_initial_password()
+        self.assertEqual(ctx.exception.code, 1)
 
 
 if __name__ == "__main__":

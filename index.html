@@ -306,7 +306,7 @@
       <div class="input-group">
         <label for="team" data-i18n="label_team">Nome del team / progetto</label>
         <input type="text" id="team" data-i18n-ph="ph_team" placeholder="es. ProjectAlpha" required>
-        <div class="error-msg" id="team-error" data-i18n="err_team">Inserisci il nome del team</div>
+        <div class="error-msg" id="team-error" data-i18n="err_team">Solo lettere, cifre, punto, trattino e underscore, senza spazi (es. ProjectAlpha)</div>
       </div>
     </div>
 
@@ -397,7 +397,7 @@
       section_contact: 'Contatto',
       label_email: 'Email', ph_email: 'mario.rossi@studenti.naba.it', err_email: 'Inserisci un indirizzo email valido',
       section_project: 'Progetto',
-      label_team: 'Nome del team / progetto', ph_team: 'es. ProjectAlpha', err_team: 'Inserisci il nome del team',
+      label_team: 'Nome del team / progetto', ph_team: 'es. ProjectAlpha', err_team: 'Solo lettere, cifre, punto, trattino e underscore, senza spazi (es. ProjectAlpha)',
       section_academic: 'Percorso accademico',
       label_tesista: 'Sei un tesista?', sublabel_tesista: 'I tesisti non richiedono anno di corso',
       label_anno: 'Anno di corso', opt_select_anno: 'Seleziona anno',
@@ -423,7 +423,7 @@
       section_contact: 'Contact',
       label_email: 'Email', ph_email: 'john.doe@studenti.naba.it', err_email: 'Enter a valid email address',
       section_project: 'Project',
-      label_team: 'Team / project name', ph_team: 'e.g. ProjectAlpha', err_team: 'Enter the team name',
+      label_team: 'Team / project name', ph_team: 'e.g. ProjectAlpha', err_team: 'Letters, digits, dot, dash and underscore only, no spaces (e.g. ProjectAlpha)',
       section_academic: 'Academic path',
       label_tesista: 'Are you a thesis student?', sublabel_tesista: 'Thesis students don\'t need to specify the year',
       label_anno: 'Year of study', opt_select_anno: 'Select year',
@@ -669,7 +669,7 @@
     if (!nomeEl.value.trim()) { showError('nome-error', true); valid = false; } else showError('nome-error', false);
     if (!cognomeEl.value.trim()) { showError('cognome-error', true); valid = false; } else showError('cognome-error', false);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailEl.value.trim())) { showError('email-error', true); valid = false; } else showError('email-error', false);
-    if (!teamEl.value.trim()) { showError('team-error', true); valid = false; } else showError('team-error', false);
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(teamEl.value.trim())) { showError('team-error', true); valid = false; } else showError('team-error', false);
     if (!tesistaEl.checked && !annoEl.value) { showError('anno-error', true); valid = false; } else showError('anno-error', false);
 
     // Validate group members if applicable

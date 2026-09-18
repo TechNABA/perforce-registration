@@ -221,6 +221,24 @@ def export_xlsx(rows: list[dict], path: Path) -> None:
     print("Contiene dati personali: non committarlo.")
 
 
+def ask_initial_password() -> str | None:
+    """Chiede la password iniziale con conferma: non viene mai mostrata né
+    inviata allo studente dallo script, quindi un errore di battitura
+    resterebbe silenzioso senza una seconda lettura."""
+    password = getpass.getpass(
+        "Password iniziale per i nuovi utenti (Invio per non impostarla): "
+    )
+    if not password:
+        return None
+
+    confirm = getpass.getpass("Ripeti la password: ")
+    if confirm != password:
+        print("ERRORE: le due password non coincidono.")
+        sys.exit(1)
+
+    return password
+
+
 # ── Main ────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(
@@ -268,9 +286,7 @@ Esempi:
 
     # Password iniziale degli account studente: chiesta qui, mai da riga di
     # comando, dove sarebbe leggibile da chiunque altro usi la macchina.
-    initial_password = getpass.getpass(
-        "Password iniziale per i nuovi utenti (Invio per non impostarla): "
-    ) or None
+    initial_password = ask_initial_password()
 
     print(f"Connessione a {P4.port}...")
     result = p4c.connect(P4)

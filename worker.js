@@ -96,9 +96,12 @@ function isAdmin(request, env) {
 }
 
 // ── Validazione ───────────────────────────────────────────────
-const RE_USERNAME = /^[A-Za-z0-9._-]{2,64}$/;
+// Stesso alfabeto di P4_NAME_RE in scripts/p4_common.py e di p4: primo
+// carattere lettera o cifra, niente spazi (un nome con spazio non si lascia
+// creare da `p4 group -i`).
+const RE_USERNAME = /^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$/;
 const RE_EMAIL = /^[^@\s]+@[^@\s.]+\.[^@\s]+$/;
-const RE_TEAM = /^[A-Za-z0-9 ._-]{1,64}$/;
+const RE_TEAM = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 function clean(value, maxLen) {
   // Via i caratteri di controllo: finirebbero nel CSV di export.

@@ -46,8 +46,8 @@ from naba_store import FIELDS, StoreError
 # La connessione viene creata in main() e usata dalle funzioni qui sotto.
 P4 = None
 
-# Utenti esclusi dall'export. Non ce ne sono di scritti qui: l'unico che va
-# sempre escluso è l'admin con cui ci si connette, e lo si conosce a runtime.
+# Utenti esclusi dall'export (nomi lowercase). Si riempie in main(): sempre
+# l'admin con cui ci si connette, più quelli passati con --exclude.
 EXCLUDE_USERS = set()
 # ══════════════════════════════════════════════════════════════
 
@@ -66,7 +66,7 @@ def get_all_users() -> list[dict]:
         # Formato: "username <email> (Full Name) accessed YYYY/MM/DD"
         username = line.split(" ")[0]
 
-        if username in EXCLUDE_USERS:
+        if username.lower() in EXCLUDE_USERS:
             continue
 
         # Lo spec completo è più affidabile del parsing della riga
@@ -113,7 +113,7 @@ def get_user_groups() -> dict[str, list[str]]:
             if in_users:
                 if line.startswith("\t"):
                     member = line.strip()
-                    if member not in EXCLUDE_USERS:
+                    if member.lower() not in EXCLUDE_USERS:
                         user_groups.setdefault(member, []).append(group_name)
                 else:
                     in_users = False
@@ -132,14 +132,21 @@ def main():
                         help="Anteprima senza inviare nulla al Worker")
     parser.add_argument("--csv", type=Path, default=None,
                         help="Salva anche un CSV locale (contiene dati personali)")
+    parser.add_argument("--exclude", type=str, default="",
+                        help="Account da non esportare, separati da virgola (admin, servizio)")
     args = parser.parse_args()
+
+    for name in args.exclude.split(","):
+        name = name.strip().lower()
+        if name:
+            EXCLUDE_USERS.add(name)
 
     # Server, utente, password Perforce
     global P4
     P4 = p4c.ask_p4_connection()
 
     # L'admin connesso non finisce mai nell'export verso il KV.
-    EXCLUDE_USERS.add(P4.user)
+    EXCLUDE_USERS.add(P4.user.lower())
 
     print(f"\nConnessione a {P4.port}...")
     result = p4c.connect(P4)
