@@ -265,6 +265,16 @@ class TestDestructive(unittest.TestCase):
         self.assertIn("workspace non trovato", err)
         self.assertEqual(len(client.calls), 1)
 
+    def test_changelist_non_cancellata_se_change_d_fallisce_dopo_un_revert_riuscito(self):
+        # Revert riuscito, ma "change -d -f" fallisce (es. bloccata da un lock):
+        # l'errore del server va propagato così com'è, non inghiottito.
+        change_spec = "Change:\t42\nClient:\tws_mario\nStatus:\tpending\n"
+        client = FakeP4([completed(stdout=change_spec), completed(),
+                         completed(returncode=1, stderr="locked")])
+        ok, err = p4c.delete_pending_change(client, "42")
+        self.assertEqual((ok, err), (False, "locked"))
+        self.assertEqual(len(client.calls), 3)
+
     def test_remove_user_from_group_scrive_lo_spec_ripulito(self):
         client = FakeP4([completed(stdout=GROUP_SPEC), completed()])
         ok, err, era_membro, rimasti = p4c.remove_user_from_group(
@@ -376,6 +386,18 @@ class TestSelectTeamWorkspaces(unittest.TestCase):
         self.assertEqual(targeted, [])
         self.assertEqual(shared, [])
 
+    def test_workspace_con_view_vuota_non_compare_in_nessuna_lista(self):
+        # View: presente ma senza righe sotto: nessun depot mappato, non è né
+        # targeted né shared.
+        spec = (
+            "Client:\tws4\n"
+            "View:\n"
+        )
+        client = FakeP4([completed(stdout=spec)])
+        targeted, shared = perforce_cleanup.select_team_workspaces(client, ["ws4"], "alfa")
+        self.assertEqual(targeted, [])
+        self.assertEqual(shared, [])
+
 
 # ── purge() non si autoconferma ─────────────────────────────────
 class TestPurgeConfirm(unittest.TestCase):
@@ -394,7 +416,7 @@ class TestCleanupNonCancellaUtenteSeUnErroreCePrecedente(unittest.TestCase):
         delete_user_mock = mock.MagicMock(return_value=(True, ""))
         with mock.patch.object(sys, "argv", ["perforce_cleanup.py", "--user", "mario_rossi"]), \
              mock.patch("builtins.input", return_value="CONFIRM"), \
-             mock.patch("sys.stdout", new_callable=io.StringIO), \
+             mock.patch("sys.stdout", new_callable=io.StringIO) as out, \
              mock.patch.object(perforce_cleanup.naba_store, "worker_url", return_value="https://worker.test"), \
              mock.patch.object(perforce_cleanup.naba_store, "get_admin_token", return_value="tok"), \
              mock.patch.object(perforce_cleanup.naba_store, "fetch_users", return_value=[]), \
@@ -409,6 +431,12 @@ class TestCleanupNonCancellaUtenteSeUnErroreCePrecedente(unittest.TestCase):
             perforce_cleanup.main()
 
         delete_user_mock.assert_not_called()
+        # 2b: l'utente trattenuto va detto in chiaro nell'output, non solo
+        # inferito dal fatto che delete_user non è stato chiamato.
+        self.assertIn(
+            "[trattenuto] Utente 'mario_rossi' non cancellato: 1 oggetto/i sopra non rimossi",
+            out.getvalue(),
+        )
 
 
 class TestPruneNonCancellaLutenteOrfanoSeUnErroreCePrecedente(unittest.TestCase):
@@ -432,6 +460,35 @@ class TestPruneNonCancellaLutenteOrfanoSeUnErroreCePrecedente(unittest.TestCase)
             perforce_prune.main()
 
         delete_user_mock.assert_not_called()
+
+    def test_orfano_pulito_viene_cancellato_anche_se_un_altro_orfano_fallisce(self):
+        # Due orfani: "fallito" (il suo workspace non si cancella) e "pulito"
+        # (va liscio). prune deve trattenere solo il primo e completare il
+        # secondo — un errore su un utente non deve bloccare gli altri.
+        fake = FakeP4()
+        delete_user_mock = mock.MagicMock(return_value=(True, ""))
+        delete_workspace_mock = mock.MagicMock(side_effect=[(False, "boom"), (True, "")])
+        with mock.patch.object(sys, "argv", ["perforce_prune.py"]), \
+             mock.patch("builtins.input", return_value="CONFIRM"), \
+             mock.patch("sys.stdout", new_callable=io.StringIO) as out, \
+             mock.patch.object(p4c, "ask_p4_connection", return_value=fake), \
+             mock.patch.object(p4c, "connect", return_value=completed()), \
+             mock.patch.object(perforce_prune, "get_all_users", return_value=["fallito", "pulito"]), \
+             mock.patch.object(perforce_prune, "get_users_in_groups", return_value=set()), \
+             mock.patch.object(perforce_prune, "get_users_in_protections", return_value=set()), \
+             mock.patch.object(perforce_prune, "get_groups_in_protections", return_value=set()), \
+             mock.patch.object(perforce_prune, "get_all_groups", return_value=[]), \
+             mock.patch.object(p4c, "pending_changes", return_value=[]), \
+             mock.patch.object(p4c, "user_workspaces", return_value=["ws1"]), \
+             mock.patch.object(p4c, "delete_workspace", delete_workspace_mock), \
+             mock.patch.object(p4c, "delete_user", delete_user_mock):
+            perforce_prune.main()
+
+        delete_user_mock.assert_called_once_with(fake, "pulito", False)
+        self.assertIn(
+            "[kept] User 'fallito' kept: 1 object(s) above could not be removed",
+            out.getvalue(),
+        )
 
 
 # ── get_all_users() esclude account admin/servizio (contratto 3c) ──
@@ -466,6 +523,30 @@ class TestExportPUsersEscludeAccount(unittest.TestCase):
         self.assertEqual(users, [])
         self.assertNotIn(("user", "-o", "VillaL"),
                          [c[0] for c in export_p4_users.P4.calls])
+
+
+# ── get_user_groups() esclude account admin/servizio (contratto 3c) ──
+class TestExportPUserGroupsEscludeAccount(unittest.TestCase):
+    def tearDown(self):
+        export_p4_users.P4 = None
+
+    def test_membro_escluso_case_insensitive_non_compare_ma_gli_altri_si(self):
+        group_spec = (
+            "Group:\tAlfa\n"
+            "Users:\n"
+            "\tVillaL\n"
+            "\tmario_rossi\n"
+        )
+        export_p4_users.P4 = FakeP4([
+            completed(stdout="Alfa\n"),
+            completed(stdout=group_spec),
+        ])
+        with mock.patch.object(export_p4_users, "EXCLUDE_USERS", {"villal"}):
+            groups = export_p4_users.get_user_groups()
+
+        self.assertNotIn("VillaL", groups)
+        self.assertNotIn("villal", groups)
+        self.assertEqual(groups, {"mario_rossi": ["Alfa"]})
 
 
 # ── ask_initial_password() con conferma (contratto 3d) ──────────

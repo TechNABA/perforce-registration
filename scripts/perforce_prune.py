@@ -236,7 +236,7 @@ Examples:
         # changelist behind: this script iterates `p4 users`, so once the account
         # is gone the orphan is never seen again.
         if user_errors:
-            print(f"  [skip] User '{user}' kept: {user_errors} object(s) above could not be removed")
+            print(f"  [kept] User '{user}' kept: {user_errors} object(s) above could not be removed")
             continue
 
         # And finally the account

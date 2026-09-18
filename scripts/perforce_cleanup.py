@@ -293,7 +293,7 @@ Esempi:
             # restano se una cancellazione qui sopra è fallita: perforce_prune.py
             # itera `p4 users`, quindi quell'utente non c'è più e non li rivede.
             if errors:
-                print(f"    [skip] Utente '{username}' non cancellato: {errors} oggetto/i sopra non rimossi — sistemali e rilancia")
+                print(f"    [trattenuto] Utente '{username}' non cancellato: {errors} oggetto/i sopra non rimossi — sistemali e rilancia")
             else:
                 ok, err = p4c.delete_user(P4, username, args.dry_run)
                 if ok:

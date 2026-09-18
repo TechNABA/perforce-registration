@@ -46,8 +46,8 @@ from naba_store import FIELDS, StoreError
 # La connessione viene creata in main() e usata dalle funzioni qui sotto.
 P4 = None
 
-# Utenti esclusi dall'export (nomi lowercase). Vuoto all'avvio: l'admin con
-# cui ci si connette si aggiunge sempre a runtime, gli altri via --exclude.
+# Utenti esclusi dall'export (nomi lowercase). Si riempie in main(): sempre
+# l'admin con cui ci si connette, più quelli passati con --exclude.
 EXCLUDE_USERS = set()
 # ══════════════════════════════════════════════════════════════
 
