@@ -28,7 +28,7 @@ import sys
 
 # Username, gruppi, depot e workspace. Perforce accetterebbe di più, ma questo
 # è tutto ciò che il nostro flusso genera: quello che non rientra è sospetto.
-P4_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+P4_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 class P4Error(RuntimeError):
@@ -44,8 +44,8 @@ def check_p4_name(name: str, what: str = "nome") -> str:
     clean = (name or "").strip()
     if not valid_p4_name(clean):
         raise P4Error(
-            f"{what} non valido: {clean!r} — ammessi solo lettere, cifre, "
-            f"punto, trattino e underscore"
+            f"{what} non valido: {clean!r} — il primo carattere deve essere "
+            f"lettera o cifra, poi solo lettere, cifre, punto, trattino e underscore"
         )
     return clean
 
@@ -204,7 +204,7 @@ def parse_view_depots(spec_text: str) -> set[str]:
             continue
         if in_view:
             if line.startswith("\t") or line.startswith("    "):
-                entry = line.strip().lstrip("-+").strip('"')
+                entry = line.strip().lstrip("-+").strip('"').lstrip("&")
                 if entry.startswith("//"):
                     depot = entry[2:].split("/")[0]
                     if depot:
@@ -276,8 +276,14 @@ def delete_pending_change(client: P4Client, change: str,
     if dry_run:
         return True, ""
 
+    ws_name = change_client(client, change)
+    if not ws_name:
+        return False, f"changelist {change}: workspace non trovato, revert impossibile"
+
     # Senza il revert la changelist non si lascia cancellare: i file restano aperti.
-    reverted = client.run("revert", "-C", change, "//...")
+    # -C è il client, -c la changelist: revert come admin nel workspace di un
+    # altro utente, non richiede di essere quel client.
+    reverted = client.run("revert", "-C", ws_name, "-c", change, "//...")
     if reverted.returncode != 0:
         return False, f"revert della changelist {change} fallito: {reverted.stderr.strip()}"
 
@@ -293,7 +299,9 @@ def delete_workspace(client: P4Client, ws_name: str,
     if dry_run:
         return True, ""
 
-    reverted = client.run("-c", ws_name, "revert", "//...")
+    # Forma admin: -C è il client, non "-c ws revert" (quella richiede di
+    # essere quel client, non lo revertirebbe per un altro).
+    reverted = client.run("revert", "-C", ws_name, "//...")
     if reverted.returncode != 0:
         return False, f"revert del workspace '{ws_name}' fallito: {reverted.stderr.strip()}"
 

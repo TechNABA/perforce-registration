@@ -57,6 +57,16 @@ class TestNameValidation(unittest.TestCase):
                      "a b", "a\nb", "a\tb", "", "   ", "../etc"]:
             self.assertFalse(p4c.valid_p4_name(name), repr(name))
 
+    def test_rifiuta_i_nomi_che_iniziano_con_un_carattere_non_alfanumerico(self):
+        # Il primo carattere deve essere lettera o cifra: "-D" sembrerebbe
+        # un'opzione a p4, ".hidden" e "_x" non sono username che il form genera.
+        for name in ["-D", "-", ".hidden", "_x"]:
+            self.assertFalse(p4c.valid_p4_name(name), repr(name))
+
+    def test_check_p4_name_solleva_se_il_nome_inizia_con_un_trattino(self):
+        with self.assertRaises(p4c.P4Error):
+            p4c.check_p4_name("-D", "team")
+
     def test_check_p4_name_pulisce_gli_spazi_ai_bordi(self):
         self.assertEqual(p4c.check_p4_name("  mario_rossi  ", "username"), "mario_rossi")
 
@@ -169,6 +179,24 @@ class TestViewDepots(unittest.TestCase):
     def test_senza_view_nessun_depot(self):
         self.assertEqual(p4c.parse_view_depots("Client:\tws\n"), set())
 
+    def test_mapping_ditto_conta_come_mapping_del_depot(self):
+        # "&//Depot/..." è la forma ditto della View: mappa Depot esattamente
+        # come "-//" e "+//".
+        spec = (
+            "Client:\tws_mario\n"
+            "View:\n"
+            "\t&//Alfa/... //ws_mario/Alfa/...\n"
+        )
+        self.assertEqual(p4c.parse_view_depots(spec), {"Alfa"})
+
+    def test_mapping_ditto_tra_virgolette_conta_come_mapping_del_depot(self):
+        spec = (
+            "Client:\tws_mario\n"
+            "View:\n"
+            "\t\"&//Alfa/...\" \"//ws_mario/Alfa/...\"\n"
+        )
+        self.assertEqual(p4c.parse_view_depots(spec), {"Alfa"})
+
 
 # ── Operazioni distruttive ──────────────────────────────────────
 class TestDestructive(unittest.TestCase):
@@ -191,18 +219,47 @@ class TestDestructive(unittest.TestCase):
         self.assertEqual(len(client.calls), 1)
 
     def test_changelist_non_cancellata_se_il_revert_fallisce(self):
-        client = FakeP4([completed(returncode=1, stderr="in uso")])
+        # Trova il workspace giusto (change -o), ma il revert in quel
+        # workspace fallisce: niente change -d -f.
+        change_spec = "Change:\t42\nClient:\tws_mario\nStatus:\tpending\n"
+        client = FakeP4([completed(stdout=change_spec),
+                         completed(returncode=1, stderr="boom")])
         ok, err = p4c.delete_pending_change(client, "42")
-        self.assertFalse(ok)
-        self.assertEqual(len(client.calls), 1)
+        self.assertEqual((ok, err), (False, "revert della changelist 42 fallito: boom"))
+        self.assertEqual(len(client.calls), 2)
+        self.assertEqual(client.calls[1][0], ("revert", "-C", "ws_mario", "-c", "42", "//..."))
 
     def test_workspace_cancellato_dopo_un_revert_riuscito(self):
+        # Forma admin: -C è il client, non "-c client revert" (quella
+        # richiede che l'operatore SIA quel client, non lo cancella per altri).
         client = FakeP4([completed(), completed()])
         ok, err = p4c.delete_workspace(client, "ws_mario")
         self.assertTrue(ok)
         self.assertEqual(err, "")
-        self.assertEqual(client.calls[0][0], ("-c", "ws_mario", "revert", "//..."))
+        self.assertEqual(client.calls[0][0], ("revert", "-C", "ws_mario", "//..."))
         self.assertEqual(client.calls[1][0], ("client", "-d", "-f", "ws_mario"))
+
+    def test_changelist_riverte_nel_workspace_della_changelist_e_poi_la_cancella(self):
+        # delete_pending_change deve prima ricavare il workspace con
+        # change_client (change -o), poi revertare in forma admin (-C <ws> -c
+        # <change>), non trattare `change` come se fosse un nome di workspace.
+        change_spec = "Change:\t42\nClient:\tws_mario\nStatus:\tpending\n"
+        client = FakeP4([completed(stdout=change_spec), completed(), completed()])
+        ok, err = p4c.delete_pending_change(client, "42")
+        self.assertTrue(ok)
+        self.assertEqual(err, "")
+        self.assertEqual(client.calls[0][0], ("change", "-o", "42"))
+        self.assertEqual(client.calls[1][0], ("revert", "-C", "ws_mario", "-c", "42", "//..."))
+        self.assertEqual(client.calls[2][0], ("change", "-d", "-f", "42"))
+
+    def test_changelist_senza_workspace_non_chiama_revert(self):
+        # Se change -o non riporta un Client:, non c'è un client per il -C:
+        # niente revert, niente change -d.
+        client = FakeP4([completed(stdout="Change:\t42\nStatus:\tpending\n")])
+        ok, err = p4c.delete_pending_change(client, "42")
+        self.assertFalse(ok)
+        self.assertIn("workspace non trovato", err)
+        self.assertEqual(len(client.calls), 1)
 
     def test_remove_user_from_group_scrive_lo_spec_ripulito(self):
         client = FakeP4([completed(stdout=GROUP_SPEC), completed()])
