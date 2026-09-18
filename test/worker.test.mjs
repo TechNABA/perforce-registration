@@ -389,6 +389,28 @@ async function main() {
     check("purge di 250 record", b.deleted === 250 && env.USERS.store.size === 0, JSON.stringify(b));
   }
 
+  // ── 11. Validazione team e username (contratto 3a) ──
+  console.log("\n11. Validazione team e username");
+  {
+    const env = makeEnv();
+
+    let r = await worker.fetch(req("POST", "/", { body: { users: [user({ username: "spazio_team", team: "Project Alpha" })] } }), env, ctx);
+    check("team con spazio → 400", r.status === 400, `status ${r.status}`);
+
+    r = await worker.fetch(req("POST", "/", { body: { users: [user({ username: "trattino_team", team: "-alpha" })] } }), env, ctx);
+    check("team che inizia con trattino → 400", r.status === 400, `status ${r.status}`);
+
+    r = await worker.fetch(req("POST", "/", { body: { users: [user({ username: "punto_team", team: ".alpha" })] } }), env, ctx);
+    check("team che inizia con punto → 400", r.status === 400, `status ${r.status}`);
+
+    r = await worker.fetch(req("POST", "/", { body: { users: [user({ username: "team_valido", team: "ProjectAlpha" })] } }), env, ctx);
+    let b = await r.json();
+    check("team senza spazi → accettato", r.status === 200 && b.success, JSON.stringify(b));
+
+    r = await worker.fetch(req("POST", "/", { body: { users: [user({ username: "-mario", team: "AltroTeam" })] } }), env, ctx);
+    check("username che inizia con trattino → 400", r.status === 400, `status ${r.status}`);
+  }
+
   console.log(`\n${"=".repeat(52)}`);
   console.log(`RISULTATO: ${pass} ok, ${fail} falliti`);
   if (fail) {

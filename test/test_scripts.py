@@ -21,9 +21,11 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+import export_p4_users
 import p4_common as p4c
 import perforce_cleanup
 import perforce_prune
+import perforce_provision
 
 
 def completed(returncode=0, stdout="", stderr=""):
@@ -430,6 +432,58 @@ class TestPruneNonCancellaLutenteOrfanoSeUnErroreCePrecedente(unittest.TestCase)
             perforce_prune.main()
 
         delete_user_mock.assert_not_called()
+
+
+# ── get_all_users() esclude account admin/servizio (contratto 3c) ──
+class TestExportPUsersEscludeAccount(unittest.TestCase):
+    def tearDown(self):
+        export_p4_users.P4 = None
+
+    def test_utente_escluso_per_nome_esatto_non_viene_letto_ne_incluso(self):
+        export_p4_users.P4 = FakeP4([
+            completed(stdout=(
+                "villal <v@x> (V) accessed 2026/01/01\n"
+                "mario_rossi <m@x> (M) accessed 2026/01/01\n"
+            )),
+            completed(stdout="FullName:\tMario Rossi\nEmail:\tm@x\n"),
+        ])
+        with mock.patch.object(export_p4_users, "EXCLUDE_USERS", {"villal"}):
+            users = export_p4_users.get_all_users()
+
+        self.assertEqual([u["username"] for u in users], ["mario_rossi"])
+        self.assertNotIn(("user", "-o", "villal"),
+                         [c[0] for c in export_p4_users.P4.calls])
+
+    def test_esclusione_ignora_maiuscole_e_minuscole(self):
+        # EXCLUDE_USERS contiene nomi lowercase (come impone il contratto);
+        # l'utente arriva da "p4 users" con la capitalizzazione originale.
+        export_p4_users.P4 = FakeP4([
+            completed(stdout="VillaL <v@x> (V) accessed 2026/01/01\n"),
+        ])
+        with mock.patch.object(export_p4_users, "EXCLUDE_USERS", {"villal"}):
+            users = export_p4_users.get_all_users()
+
+        self.assertEqual(users, [])
+        self.assertNotIn(("user", "-o", "VillaL"),
+                         [c[0] for c in export_p4_users.P4.calls])
+
+
+# ── ask_initial_password() con conferma (contratto 3d) ──────────
+class TestAskInitialPassword(unittest.TestCase):
+    def test_invio_vuoto_non_imposta_la_password_e_non_chiede_conferma(self):
+        with mock.patch("perforce_provision.getpass.getpass", side_effect=[""]) as gp:
+            self.assertIsNone(perforce_provision.ask_initial_password())
+        self.assertEqual(gp.call_count, 1)
+
+    def test_due_password_uguali_vengono_accettate(self):
+        with mock.patch("perforce_provision.getpass.getpass", side_effect=["segreta", "segreta"]):
+            self.assertEqual(perforce_provision.ask_initial_password(), "segreta")
+
+    def test_due_password_diverse_fermano_lo_script(self):
+        with mock.patch("perforce_provision.getpass.getpass", side_effect=["segreta", "sbagliata"]):
+            with self.assertRaises(SystemExit) as ctx:
+                perforce_provision.ask_initial_password()
+        self.assertEqual(ctx.exception.code, 1)
 
 
 if __name__ == "__main__":
