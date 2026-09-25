@@ -411,6 +411,51 @@ async function main() {
     check("username che inizia con trattino → 400", r.status === 400, `status ${r.status}`);
   }
 
+  // ── 12. Username con underscore iniziale (record del vecchio form) ──
+  // Il vecchio form generava "_wang" per un nome senza lettere latine: quei
+  // record esistono e devono restare gestibili da provisioning e cleanup.
+  console.log("\n12. Username con underscore iniziale");
+  {
+    const env = makeEnv();
+
+    let r = await worker.fetch(req("POST", "/", { body: { users: [user({ username: "_wang" })] } }), env, ctx);
+    let b = await r.json();
+    check("POST _wang → accettato", r.status === 200 && b.success && b.stored === 1, JSON.stringify(b));
+
+    r = await worker.fetch(req("PATCH", "/status", { headers: ADMIN, body: { updates: [{ username: "_wang", status: "created" }] } }), env, ctx);
+    b = await r.json();
+    check("PATCH _wang → aggiornato", b.updated === 1, JSON.stringify(b));
+
+    r = await worker.fetch(req("DELETE", "/user?username=_wang", { headers: ADMIN }), env, ctx);
+    b = await r.json();
+    check("DELETE _wang → cancellato", r.status === 200 && b.deleted === 1, JSON.stringify(b));
+
+    // Il punto iniziale no: nessun form lo ha mai generato, e "..." è il
+    // jolly di p4.
+    for (const username of [".mario", "..", "..."]) {
+      r = await worker.fetch(req("POST", "/", { body: { users: [user({ username })] } }), env, ctx);
+      check(`POST ${username} → 400`, r.status === 400, `status ${r.status}`);
+    }
+  }
+
+  // ── 13. Nomi che p4 rifiuta o legge come jolly ──
+  // Solo cifre: p4 non li accetta. "...": è il jolly di p4, e nella protezione
+  // del team varrebbe per altri depot.
+  console.log("\n13. Nomi solo numerici o con '...'");
+  {
+    const env = makeEnv();
+    for (const team of ["2024", "a...", "a...b"]) {
+      const r = await worker.fetch(req("POST", "/", { body: { users: [user({ username: "mario_rossi", team })] } }), env, ctx);
+      check(`team ${team} → 400`, r.status === 400, `status ${r.status}`);
+    }
+    for (const username of ["12345", "a...b"]) {
+      const r = await worker.fetch(req("POST", "/", { body: { users: [user({ username })] } }), env, ctx);
+      check(`username ${username} → 400`, r.status === 400, `status ${r.status}`);
+    }
+    const r = await worker.fetch(req("POST", "/", { body: { users: [user({ team: "Team2024.v2" })] } }), env, ctx);
+    check("team con cifre e punti singoli → accettato", r.status === 200, `status ${r.status}`);
+  }
+
   console.log(`\n${"=".repeat(52)}`);
   console.log(`RISULTATO: ${pass} ok, ${fail} falliti`);
   if (fail) {

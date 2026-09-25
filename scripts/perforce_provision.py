@@ -3,12 +3,13 @@
 perforce_provision.py
 
 Scarica gli utenti dal Worker Cloudflare e, per ognuno con status 'pending':
-  1. Crea l'utente Perforce
-  2. Crea il gruppo (col nome del team) se non esiste
+  1. Prepara il team, una volta sola: protezione write del gruppo sul depot,
+     poi gruppo e depot locale (col nome del team) se non esistono. Un gruppo
+     o un depot già esistente senza quella protezione, come 'depot', non è di
+     questo flusso: il team viene rifiutato e i suoi record vanno in 'error'
+  2. Crea l'utente Perforce
   3. Aggiunge l'utente al gruppo
-  4. Crea un depot locale (col nome del team) se non esiste
-  5. Aggiunge la protezione write per il gruppo sul depot
-  6. Aggiorna lo status a 'created' sul Worker
+  4. Aggiorna lo status a 'created' sul Worker
 
 Token admin, server, utente e password Perforce vengono chiesti in sequenza a
 ogni esecuzione, e non sono salvati da nessuna parte. L'indirizzo del server
@@ -22,6 +23,7 @@ Uso:
     python perforce_provision.py --skip-email               # niente email
     python perforce_provision.py --category Tesi            # categoria Discord
     python perforce_provision.py --export-xlsx utenti.xlsx  # XLSX in locale
+    python perforce_provision.py --retry-errors             # riprova anche gli 'error'
 
 La password iniziale degli account studente si digita a runtime insieme alle
 altre credenziali: da riga di comando resterebbe leggibile negli argomenti del
@@ -58,15 +60,55 @@ def p4_user_exists(username: str) -> bool:
     return username in P4.run("users", username).stdout
 
 
-def p4_group_exists(group_name: str) -> bool:
-    return group_name in P4.run("groups").stdout.split()
+def list_groups() -> list[str] | None:
+    """I gruppi del server, None se l'elenco non si legge."""
+    result = P4.run("groups")
+    if result.returncode != 0:
+        print(f"    [ERRORE] Elenco dei gruppi non leggibile: {result.stderr.strip()}")
+        return None
+    return result.stdout.split()
 
 
-def p4_depot_exists(depot_name: str) -> bool:
-    for line in P4.run("depots").stdout.strip().split("\n"):
-        if line.startswith(f"Depot {depot_name} "):
-            return True
-    return False
+def list_depots() -> list[str] | None:
+    """I depot del server, None se l'elenco non si legge."""
+    result = P4.run("depots")
+    if result.returncode != 0:
+        print(f"    [ERRORE] Elenco dei depot non leggibile: {result.stderr.strip()}")
+        return None
+    return [parts[1] for parts in (line.split() for line in result.stdout.split("\n"))
+            if len(parts) >= 2 and parts[0] == "Depot"]
+
+
+def find_name(names: list[str], name: str) -> str | None:
+    """Il nome come lo scrive il server, senza distinguere maiuscole."""
+    return next((n for n in names if n.lower() == name.lower()), None)
+
+
+# Le due verifiche non distinguono maiuscole: su un server case-insensitive un
+# "group -i" per "projectalpha" sovrascriverebbe ProjectAlpha svuotandolo, e
+# "DEPOT" è il depot di default. None se l'elenco non si legge: chi chiama non
+# deve scambiarlo né per "esiste" né per "non esiste".
+def p4_group_exists(group_name: str) -> bool | None:
+    groups = list_groups()
+    return None if groups is None else find_name(groups, group_name) is not None
+
+
+def p4_depot_exists(depot_name: str) -> bool | None:
+    depots = list_depots()
+    return None if depots is None else find_name(depots, depot_name) is not None
+
+
+def canonical_team(team: str, known=()) -> str:
+    """
+    Il nome del team come lo conosce già il server, o come è già stato scelto
+    in questo giro (`known`). Gli studenti scrivono lo stesso team in modi
+    diversi: così finiscono tutti nello stesso gruppo. La grafia esatta vince,
+    perché su un server case-sensitive "staff" e "Staff" sono due gruppi diversi.
+    """
+    names = [*(list_groups() or []), *(list_depots() or []), *known]
+    if team in names:
+        return team
+    return find_name(names, team) or team
 
 
 def create_user(username: str, full_name: str, email: str, password: str = None, dry_run: bool = False) -> bool:
@@ -104,7 +146,10 @@ def create_user(username: str, full_name: str, email: str, password: str = None,
 
 
 def create_group(group_name: str, dry_run: bool = False) -> bool:
-    if p4_group_exists(group_name):
+    exists = p4_group_exists(group_name)
+    if exists is None:
+        return False
+    if exists:
         print(f"    [skip] Gruppo '{group_name}' già esistente")
         return True
 
@@ -156,7 +201,10 @@ def add_user_to_group(username: str, group_name: str, dry_run: bool = False) -> 
 
 
 def create_depot(depot_name: str, dry_run: bool = False) -> bool:
-    if p4_depot_exists(depot_name):
+    exists = p4_depot_exists(depot_name)
+    if exists is None:
+        return False
+    if exists:
         print(f"    [skip] Depot '{depot_name}' già esistente")
         return True
 
@@ -179,18 +227,10 @@ def create_depot(depot_name: str, dry_run: bool = False) -> bool:
     return True
 
 
-def add_protection(group_name: str, depot_name: str, dry_run: bool = False) -> bool:
-    result = P4.run("protect", "-o")
-    if result.returncode != 0:
-        print(f"    [ERRORE] Protezioni non leggibili: {result.stderr.strip()}")
-        return False
-
-    protect_spec = result.stdout
+def add_protection(group_name: str, depot_name: str, protect_spec: str,
+                   dry_run: bool = False) -> bool:
+    """Aggiunge la riga allo spec letto da setup_team, che ha già verificato che manchi."""
     prot_line = f"\twrite group {group_name} * //{depot_name}/..."
-
-    if prot_line.strip() in protect_spec:
-        print(f"    [skip] Protezione già presente per '{group_name}' su '//{depot_name}/...'")
-        return True
 
     if dry_run:
         print(f"    [dry-run] Aggiungerebbe write: gruppo '{group_name}' → '//{depot_name}/...'")
@@ -205,6 +245,51 @@ def add_protection(group_name: str, depot_name: str, dry_run: bool = False) -> b
 
     print(f"    [protect] write group:{group_name} → //{depot_name}/...")
     return True
+
+
+def has_team_protection(protect_spec: str, team: str) -> bool:
+    """
+    La riga 'write group <team> * //<team>/...', esattamente così: su un
+    server case-sensitive la riga di "staff" non dice niente del gruppo "Staff".
+    """
+    wanted = f"write group {team} * //{team}/..."
+    return any(line.strip() == wanted for line in protect_spec.split("\n"))
+
+
+def setup_team(team: str, dry_run: bool = False) -> bool:
+    """
+    Protezione, gruppo e depot del team, in quest'ordine.
+
+    La riga di protezione è il segno che il team è di questo flusso, e si
+    scrive per prima: un giro interrotto a metà si riprende rilanciando. Un
+    gruppo o un depot che esiste già senza quella riga non è nostro (es.
+    'depot', il depot di default, o un gruppo di amministratori): il team
+    viene rifiutato, perché altrimenti chi lo sceglie otterrebbe la scrittura
+    su un depot altrui o i permessi di un gruppo altrui.
+    """
+    result = P4.run("protect", "-o")
+    if result.returncode != 0:
+        print(f"    [ERRORE] Protezioni non leggibili: {result.stderr.strip()}")
+        return False
+
+    if not has_team_protection(result.stdout, team):
+        group_exists, depot_exists = p4_group_exists(team), p4_depot_exists(team)
+        if group_exists is None or depot_exists is None:
+            return False  # elenco non leggibile: l'errore l'ha già stampato list_*
+        taken = [what for what, exists in (("gruppo", group_exists),
+                                           ("depot", depot_exists)) if exists]
+        if taken:
+            print(f"    [ERRORE] Team '{team}': {' e '.join(taken)} già esistente e non creato "
+                  f"da questo flusso (manca 'write group {team} * //{team}/...'). Team non "
+                  f"configurato: se deve lavorarci davvero, aggiungi la riga a mano e rilancia "
+                  f"con --retry-errors")
+            return False
+        if not add_protection(team, team, result.stdout, dry_run):
+            return False
+
+    group_ok = create_group(team, dry_run)
+    depot_ok = create_depot(team, dry_run)
+    return group_ok and depot_ok
 
 
 def export_xlsx(rows: list[dict], path: Path) -> None:
@@ -256,6 +341,7 @@ Esempi:
   python perforce_provision.py --skip-discord --skip-email
   python perforce_provision.py --category Tesi
   python perforce_provision.py --export-xlsx ~/Desktop/utenti.xlsx
+  python perforce_provision.py --retry-errors
         """,
     )
     parser.add_argument("--dry-run", action="store_true", help="Anteprima senza modifiche")
@@ -263,6 +349,8 @@ Esempi:
     parser.add_argument("--skip-email", action="store_true", help="Salta invio email di benvenuto")
     parser.add_argument("--category", type=str, default="Tesi",
                         help="Categoria Discord per i nuovi canali (default: Tesi)")
+    parser.add_argument("--retry-errors", action="store_true",
+                        help="Riprova anche i record in 'error' (es. dopo aver sistemato un team rifiutato)")
     parser.add_argument("--export-xlsx", type=Path, default=None,
                         help="Genera l'XLSX degli utenti in locale a fine esecuzione")
     args = parser.parse_args()
@@ -310,7 +398,10 @@ Esempi:
     if args.dry_run:
         print("\n*** DRY RUN — nessuna modifica verrà applicata ***\n")
 
-    pending = [r for r in rows if r.get("status", "").strip().lower() == "pending"]
+    # Con --retry-errors ripassano anche i record in 'error': è il modo di
+    # riprendere un team rifiutato o fallito dopo averlo sistemato.
+    to_process = {"pending", "error"} if args.retry_errors else {"pending"}
+    pending = [r for r in rows if r.get("status", "").strip().lower() in to_process]
 
     if not pending:
         print("\nNessun utente pending da processare.")
@@ -320,7 +411,13 @@ Esempi:
 
     print(f"\n{len(pending)} utente/i da processare:\n")
 
-    teams_processed = set()
+    # Le varianti di maiuscole scritte dagli studenti finiscono sullo stesso
+    # nome anche in dry-run e quando il gruppo non esiste ancora: canonical_team
+    # conosce anche i nomi già scelti in questo giro. Rifiuti e cache vanno per
+    # nome risolto, non per minuscole: su un server case-sensitive "Staff" e
+    # "staff" sono due team diversi e l'uno non deve decidere per l'altro.
+    resolved = {}         # team come scritto nel record → nome usato su Perforce
+    failed_teams = set()  # nomi (già risolti) dei team rifiutati o non configurati
     status_updates = []
     success_count = 0
     error_count = 0
@@ -356,23 +453,28 @@ Esempi:
 
         all_ok = True
 
-        # 1. Utente
-        if not create_user(username, full_name, email, initial_password, args.dry_run):
-            all_ok = False
+        # 1. Protezione, gruppo e depot, una volta per team e prima degli
+        # account: per un team rifiutato non si crea nessun utente, che
+        # occuperebbe una licenza senza avere accesso a niente.
+        if team not in resolved:
+            name = canonical_team(team, resolved.values())
+            if name not in resolved.values() and not setup_team(name, args.dry_run):
+                failed_teams.add(name)
+            resolved[team] = name
+        team = resolved[team]
+        user["team"] = team  # Discord ed email usano lo stesso nome di Perforce
 
-        # 2. Gruppo + depot + protezione (una volta per team)
-        if team not in teams_processed:
-            if not create_group(team, args.dry_run):
-                all_ok = False
-            if not create_depot(team, args.dry_run):
-                all_ok = False
-            if not add_protection(team, team, args.dry_run):
-                all_ok = False
-            teams_processed.add(team)
-
-        # 3. Utente nel gruppo
-        if not add_user_to_group(username, team, args.dry_run):
+        if team in failed_teams:
+            print(f"    [ERRORE] Team '{team}' non configurato: '{username}' non creato")
             all_ok = False
+        else:
+            # 2. Utente
+            if not create_user(username, full_name, email, initial_password, args.dry_run):
+                all_ok = False
+
+            # 3. Utente nel gruppo
+            if not add_user_to_group(username, team, args.dry_run):
+                all_ok = False
 
         # 4. Nuovo status
         new_status = "created" if all_ok else "error"

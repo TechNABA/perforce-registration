@@ -96,12 +96,16 @@ function isAdmin(request, env) {
 }
 
 // ── Validazione ───────────────────────────────────────────────
-// Stesso alfabeto di P4_NAME_RE in scripts/p4_common.py e di p4: primo
-// carattere lettera o cifra, niente spazi (un nome con spazio non si lascia
-// creare da `p4 group -i`).
-const RE_USERNAME = /^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$/;
+// Stesso alfabeto di P4_NAME_RE in scripts/p4_common.py: niente spazi (un
+// nome con spazio non si lascia creare da `p4 group -i`) e niente trattino o
+// punto iniziale. Niente nomi di sole cifre, che p4 rifiuta, né "...", che per
+// p4 è un jolly. Lo username può iniziare con underscore, perché il vecchio
+// form generava "_wang" e quei record devono restare gestibili da PATCH e
+// DELETE. Il team resta più stretto: RE_TEAM vale per i record che entrano
+// (form e /import), mentre PATCH e DELETE non lo controllano.
+const RE_USERNAME = /^(?!\d+$)(?!.*\.\.\.)[A-Za-z0-9_][A-Za-z0-9._-]{1,63}$/;
 const RE_EMAIL = /^[^@\s]+@[^@\s.]+\.[^@\s]+$/;
-const RE_TEAM = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const RE_TEAM = /^(?!\d+$)(?!.*\.\.\.)[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 function clean(value, maxLen) {
   // Via i caratteri di controllo: finirebbero nel CSV di export.
