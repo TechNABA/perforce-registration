@@ -28,7 +28,12 @@ import sys
 
 # Username, gruppi, depot e workspace. Perforce accetterebbe di più, ma questo
 # è tutto ciò che il nostro flusso genera: quello che non rientra è sospetto.
-P4_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+# Niente trattino iniziale ("-D" sembrerebbe un'opzione) né punto iniziale (il
+# team diventa il Map: del depot, e "../..." uscirebbe dalla root del server).
+# L'underscore sì: il vecchio form generava "_wang" e quei record vanno gestiti.
+# Niente nomi di sole cifre, che p4 rifiuta, né "...", che per p4 è un jolly:
+# nella protezione "//a.../..." varrebbe per tutti i depot che iniziano con "a".
+P4_NAME_RE = re.compile(r"^(?!\d+$)(?!.*\.\.\.)[A-Za-z0-9_][A-Za-z0-9._-]*$")
 
 
 class P4Error(RuntimeError):
@@ -44,8 +49,9 @@ def check_p4_name(name: str, what: str = "nome") -> str:
     clean = (name or "").strip()
     if not valid_p4_name(clean):
         raise P4Error(
-            f"{what} non valido: {clean!r} — il primo carattere deve essere "
-            f"lettera o cifra, poi solo lettere, cifre, punto, trattino e underscore"
+            f"{what} non valido: {clean!r} — solo lettere, cifre, punto, "
+            f"trattino e underscore; non può iniziare con trattino o punto, "
+            f"essere di sole cifre o contenere '...'"
         )
     return clean
 
@@ -204,7 +210,8 @@ def parse_view_depots(spec_text: str) -> set[str]:
             continue
         if in_view:
             if line.startswith("\t") or line.startswith("    "):
-                entry = line.strip().lstrip("-+").strip('"').lstrip("&")
+                # Il prefisso -, + o & può stare dentro o fuori dalle virgolette.
+                entry = line.strip().lstrip('-+&"')
                 if entry.startswith("//"):
                     depot = entry[2:].split("/")[0]
                     if depot:
@@ -236,11 +243,11 @@ def user_workspaces(client: P4Client, username: str) -> list[str]:
     return workspaces
 
 
-def workspace_depots(client: P4Client, ws_name: str) -> set[str]:
-    """I depot su cui un workspace è mappato."""
+def workspace_depots(client: P4Client, ws_name: str) -> set[str] | None:
+    """I depot su cui un workspace è mappato, None se lo spec non si legge."""
     result = client.run("client", "-o", ws_name)
     if result.returncode != 0:
-        return set()
+        return None
     return parse_view_depots(result.stdout)
 
 
@@ -270,7 +277,8 @@ def pending_changes(client: P4Client, username: str) -> list[str]:
 def delete_pending_change(client: P4Client, change: str,
                           dry_run: bool = False) -> tuple[bool, str]:
     """
-    Cancella una changelist pending, rilasciando prima i file aperti.
+    Cancella una changelist pending, rilasciando prima i file aperti e quelli
+    in shelve.
     Ritorna (riuscito, messaggio d'errore).
     """
     if dry_run:
@@ -287,9 +295,16 @@ def delete_pending_change(client: P4Client, change: str,
     if reverted.returncode != 0:
         return False, f"revert della changelist {change} fallito: {reverted.stderr.strip()}"
 
+    # Nemmeno i file in shelve lasciano cancellare la changelist. Senza shelve
+    # p4 rifiuta anche questo, e va bene: decide l'esito di `change -d`.
+    unshelved = client.run("shelve", "-d", "-f", "-c", change)
+
     result = client.run("change", "-d", "-f", change)
     if result.returncode != 0:
-        return False, result.stderr.strip()
+        err = result.stderr.strip()
+        if unshelved.returncode != 0:
+            err += f" (shelve -d: {unshelved.stderr.strip()})"
+        return False, err
     return True, ""
 
 

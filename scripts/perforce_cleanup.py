@@ -53,24 +53,32 @@ P4 = None
 # ══════════════════════════════════════════════════════════════
 
 
-def select_team_workspaces(client, workspaces: list[str], team_filter: str) -> tuple[list[str], list[str]]:
+def select_team_workspaces(client, workspaces: list[str],
+                           team_filter: str) -> tuple[list[str], list[str], list[str]]:
     """
     Divide i workspace tra quelli mappati SOLO sul depot del team (da cancellare)
     e quelli che mappano anche altri depot (condivisi: si segnalano, non si toccano).
+    Quelli di cui non si legge lo spec finiscono nella terza lista: non si sa
+    cosa mappano, quindi non si toccano, ma vanno segnalati.
     Confronto case-insensitive sui nomi dei depot.
     """
     team_lower = team_filter.lower()
     targeted = []
     shared = []
+    unreadable = []
     for ws in workspaces:
-        depots = {d.lower() for d in p4c.workspace_depots(client, ws)}
+        mapped = p4c.workspace_depots(client, ws)
+        if mapped is None:
+            unreadable.append(ws)
+            continue
+        depots = {d.lower() for d in mapped}
         if not depots:
             continue
         if depots == {team_lower}:
             targeted.append(ws)
         elif team_lower in depots:
             shared.append(ws)
-    return targeted, shared
+    return targeted, shared, unreadable
 
 
 def find_kv_matches(rows: list[dict], username: str, team: str = None) -> list[dict]:
@@ -193,6 +201,7 @@ Esempi:
     all_changes = p4c.pending_changes(P4, username) if exists_on_p4 else []
 
     shared_workspaces = []
+    unreadable_workspaces = []
     if drop_account:
         workspaces = all_workspaces
         changes = all_changes
@@ -203,7 +212,9 @@ Esempi:
         # grazie agli altri team e non lo tocca mai. I workspace condivisi con
         # altri team, invece, restano: cancellarli toglierebbe l'accesso anche a
         # chi non c'entra con questa rimozione.
-        workspaces, shared_workspaces = select_team_workspaces(P4, all_workspaces, team_filter)
+        workspaces, shared_workspaces, unreadable_workspaces = select_team_workspaces(
+            P4, all_workspaces, team_filter
+        )
         targeted = set(workspaces)
         changes = [c for c in all_changes if p4c.change_client(P4, c) in targeted]
     else:
@@ -222,6 +233,8 @@ Esempi:
         print(f"  Workspace da pulire:  {len(workspaces)} di {len(all_workspaces)}")
         if shared_workspaces:
             print(f"  Workspace condivisi:  {', '.join(shared_workspaces)} (mappano anche altri depot, non toccati)")
+        if unreadable_workspaces:
+            print(f"  Workspace non letti:  {', '.join(unreadable_workspaces)} (client -o fallito: non toccati, controllali a mano)")
         print(f"  Changelist pending:   {len(changes)} di {len(all_changes)}")
         print(f"  Account Perforce:     {'CANCELLATO' if drop_account else 'mantenuto'}")
 
@@ -247,7 +260,8 @@ Esempi:
             print("Annullato.")
             return
 
-    errors = 0
+    # Un workspace di cui non si sa cosa mappa è lavoro non fatto: conta come errore.
+    errors = len(unreadable_workspaces)
     tag = "dry-run" if args.dry_run else None
 
     # ── Perforce ──
@@ -303,9 +317,18 @@ Esempi:
                     errors += 1
 
     # ── KV ──
-    if matches and not args.dry_run:
+    # Con qualcosa ancora su Perforce, 'removed' (o il record cancellato)
+    # direbbe il falso. Il rilancio riparte da ciò che resta e aggiorna il KV
+    # quando Perforce è pulito.
+    kv_skipped = bool(matches and errors)
+    if matches:
         print(f"\n{'─' * 50}")
         print("KV")
+    if kv_skipped and args.dry_run:
+        print(f"    [dry-run] KV non verrebbe aggiornato: {errors} errore/i su Perforce")
+    elif kv_skipped:
+        print(f"    [saltato] KV non aggiornato: {errors} errore/i su Perforce — sistemali e rilancia")
+    elif matches and not args.dry_run:
         try:
             if args.delete_record:
                 deleted = naba_store.delete_user(admin_token, username, team_filter)
@@ -325,9 +348,7 @@ Esempi:
             print("    Gli oggetti Perforce sono già stati rimossi.")
             print("    Rilancia solo la parte KV, o controlla con kv_status.py")
             errors += 1
-    elif matches and args.dry_run:
-        print(f"\n{'─' * 50}")
-        print("KV")
+    elif matches:
         action = "cancellerebbe" if args.delete_record else "porterebbe a 'removed'"
         print(f"    [dry-run] {action} {len(matches)} record")
 
@@ -350,7 +371,7 @@ Esempi:
 
     if args.dry_run:
         print("\n*** Era un dry run. Rilancia senza --dry-run per applicare. ***")
-    elif not args.delete_record and matches:
+    elif not args.delete_record and matches and not kv_skipped:
         # Il KV è eventually consistent: l'export può restare indietro.
         print("\nIl KV può metterci qualche decina di secondi ad allinearsi.")
         print("Verifica con: python scripts/kv_status.py")

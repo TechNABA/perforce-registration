@@ -306,7 +306,7 @@
       <div class="input-group">
         <label for="team" data-i18n="label_team">Nome del team / progetto</label>
         <input type="text" id="team" data-i18n-ph="ph_team" placeholder="es. ProjectAlpha" required>
-        <div class="error-msg" id="team-error" data-i18n="err_team">Solo lettere, cifre, punto, trattino e underscore, senza spazi (es. ProjectAlpha)</div>
+        <div class="error-msg" id="team-error" data-i18n="err_team">Solo lettere, cifre, punto, trattino e underscore, senza spazi, non solo cifre e senza "..." (es. ProjectAlpha)</div>
       </div>
     </div>
 
@@ -397,7 +397,7 @@
       section_contact: 'Contatto',
       label_email: 'Email', ph_email: 'mario.rossi@studenti.naba.it', err_email: 'Inserisci un indirizzo email valido',
       section_project: 'Progetto',
-      label_team: 'Nome del team / progetto', ph_team: 'es. ProjectAlpha', err_team: 'Solo lettere, cifre, punto, trattino e underscore, senza spazi (es. ProjectAlpha)',
+      label_team: 'Nome del team / progetto', ph_team: 'es. ProjectAlpha', err_team: 'Solo lettere, cifre, punto, trattino e underscore, senza spazi, non solo cifre e senza "..." (es. ProjectAlpha)',
       section_academic: 'Percorso accademico',
       label_tesista: 'Sei un tesista?', sublabel_tesista: 'I tesisti non richiedono anno di corso',
       label_anno: 'Anno di corso', opt_select_anno: 'Seleziona anno',
@@ -412,6 +412,8 @@
       btn_submit: 'Invia richiesta',
       msg_success: 'Richiesta inviata con successo. Il tuo account verrà creato a breve.',
       msg_error: 'Si è verificato un errore: {err}. Riprova più tardi.',
+      msg_partial: 'Registrazione incompleta. Non registrati: {users}. Correggi i dati e reinvia: chi è già registrato non viene duplicato.',
+      err_username: 'Nome e cognome vanno scritti in caratteri latini, perché da lì si ricava lo username: {names}',
       err_member_nome: 'Inserisci il nome', err_member_cognome: 'Inserisci il cognome', err_member_email: 'Email non valida'
     },
     en: {
@@ -423,7 +425,7 @@
       section_contact: 'Contact',
       label_email: 'Email', ph_email: 'john.doe@studenti.naba.it', err_email: 'Enter a valid email address',
       section_project: 'Project',
-      label_team: 'Team / project name', ph_team: 'e.g. ProjectAlpha', err_team: 'Letters, digits, dot, dash and underscore only, no spaces (e.g. ProjectAlpha)',
+      label_team: 'Team / project name', ph_team: 'e.g. ProjectAlpha', err_team: 'Letters, digits, dot, dash and underscore only, no spaces, not digits only and no "..." (e.g. ProjectAlpha)',
       section_academic: 'Academic path',
       label_tesista: 'Are you a thesis student?', sublabel_tesista: 'Thesis students don\'t need to specify the year',
       label_anno: 'Year of study', opt_select_anno: 'Select year',
@@ -438,6 +440,8 @@
       btn_submit: 'Submit request',
       msg_success: 'Request submitted successfully. Your account will be created shortly.',
       msg_error: 'An error occurred: {err}. Please try again later.',
+      msg_partial: 'Registration incomplete. Not registered: {users}. Fix the details and resubmit: users already registered will not be duplicated.',
+      err_username: 'First and last name must be written in Latin characters, because the username is built from them: {names}',
       err_member_nome: 'Enter the name', err_member_cognome: 'Enter the last name', err_member_email: 'Invalid email'
     }
   };
@@ -511,6 +515,14 @@
   function capitalize(str) {
     return str.trim().replace(/\b\w/g, c => c.toUpperCase());
   }
+  // Una sola regola per anteprima e invio: un nome senza lettere latine non
+  // deve lasciare un '_' iniziale nello username inviato.
+  function makeUsername(n, c) {
+    return [sanitize(n), sanitize(c)].filter(Boolean).join('_');
+  }
+  // La regola dello username nel worker: si controlla prima dell'invio,
+  // altrimenti di un gruppo verrebbe registrata solo una parte.
+  const RE_USERNAME = /^(?!\d+$)(?!.*\.\.\.)[A-Za-z0-9_][A-Za-z0-9._-]{1,63}$/;
 
   // ══════════════════════════════════════
   // Preview
@@ -518,7 +530,7 @@
   function updatePreview() {
     const n = nomeEl.value.trim(), c = cognomeEl.value.trim();
     if (n || c) {
-      const uname = [sanitize(n), sanitize(c)].filter(Boolean).join('_');
+      const uname = makeUsername(n, c);
       const fname = [capitalize(n), capitalize(c)].filter(Boolean).join(' ');
       previewUsername.textContent = uname || '—';
       previewFullname.textContent = fname || '—';
@@ -540,7 +552,7 @@
     const pillU = card.querySelector('.m-preview-username');
     const pillF = card.querySelector('.m-preview-fullname');
     if (n || c) {
-      const uname = [sanitize(n), sanitize(c)].filter(Boolean).join('_');
+      const uname = makeUsername(n, c);
       const fname = [capitalize(n), capitalize(c)].filter(Boolean).join(' ');
       pillU.textContent = uname || '—'; pillF.textContent = fname || '—';
       pu.classList.toggle('active', uname.length > 0);
@@ -669,8 +681,22 @@
     if (!nomeEl.value.trim()) { showError('nome-error', true); valid = false; } else showError('nome-error', false);
     if (!cognomeEl.value.trim()) { showError('cognome-error', true); valid = false; } else showError('cognome-error', false);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailEl.value.trim())) { showError('email-error', true); valid = false; } else showError('email-error', false);
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(teamEl.value.trim())) { showError('team-error', true); valid = false; } else showError('team-error', false);
+    if (!/^(?!\d+$)(?!.*\.\.\.)[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(teamEl.value.trim())) { showError('team-error', true); valid = false; } else showError('team-error', false);
     if (!tesistaEl.checked && !annoEl.value) { showError('anno-error', true); valid = false; } else showError('anno-error', false);
+
+    // Nome e cognome devono dare uno username valido (es. non solo caratteri
+    // non latini): lo studente non lo sceglie, quindi glielo diciamo qui.
+    const badNames = [];
+    function checkUsername(n, c) {
+      const nv = n.value.trim(), cv = c.value.trim();
+      // Come il worker: tronca a 64 caratteri, poi valida.
+      if (nv && cv && !RE_USERNAME.test(makeUsername(nv, cv).slice(0, 64))) {
+        n.classList.add('error'); c.classList.add('error');
+        badNames.push(`${nv} ${cv}`);
+        valid = false;
+      }
+    }
+    checkUsername(nomeEl, cognomeEl);
 
     // Validate group members if applicable
     if (tesistaEl.checked && thesisType === 'group') {
@@ -680,7 +706,13 @@
         if (!n.value.trim()) { n.classList.add('error'); valid = false; } else n.classList.remove('error');
         if (!c.value.trim()) { c.classList.add('error'); valid = false; } else c.classList.remove('error');
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.value.trim())) { e.classList.add('error'); valid = false; } else e.classList.remove('error');
+        checkUsername(n, c);
       });
+    }
+
+    if (badNames.length) {
+      statusMsg.className = 'status-message error';
+      statusText.textContent = t('err_username').replace('{names}', () => badNames.join(', '));
     }
     return valid;
   }
@@ -708,7 +740,7 @@
     // Build main user payload
     const mainUser = {
       timestamp: new Date().toISOString(),
-      username: sanitize(nome) + '_' + sanitize(cognome),
+      username: makeUsername(nome, cognome),
       full_name: capitalize(nome) + ' ' + capitalize(cognome),
       email: emailEl.value.trim().toLowerCase(),
       team: teamEl.value.trim(),
@@ -728,7 +760,7 @@
         const me = inputs[2].value.trim();
         allUsers.push({
           timestamp: new Date().toISOString(),
-          username: sanitize(mn) + '_' + sanitize(mc),
+          username: makeUsername(mn, mc),
           full_name: capitalize(mn) + ' ' + capitalize(mc),
           email: me.toLowerCase(),
           team: teamEl.value.trim(),
@@ -753,6 +785,21 @@
         body: JSON.stringify({ users: allUsers })
       });
       const result = await response.json();
+
+      // Chi è stato rifiutato va nominato, sia con success (almeno uno
+      // registrato) sia con 400 (nessuno nuovo, per esempio a un reinvio).
+      // Il worker restituisce un risultato per utente, nello stesso ordine.
+      const rejected = (result.results || [])
+        .map((r, i) => ({ ...r, name: allUsers[i].full_name }))
+        .filter(r => !r.ok);
+      if (rejected.length) {
+        const list = rejected.map(r => `${r.name} (${r.error})`).join(', ');
+        statusMsg.className = 'status-message error';
+        // Funzione come sostituto: un "$'" nel nome non va interpretato.
+        statusText.textContent = tr.msg_partial.replace('{users}', () => list);
+        return;
+      }
+
       if (!response.ok || !result.success) {
         throw new Error(result.error || `HTTP ${response.status}`);
       }
